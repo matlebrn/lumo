@@ -1,0 +1,20 @@
+<div id="ksplash" aria-hidden="true"><style>
+#ksplash{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(90% 60% at 50% 38%,#1c1913 0%,#09090A 70%);color:#F3EFE6;overflow:hidden;transition:opacity .5s ease,transform .5s ease;-webkit-user-select:none;user-select:none;cursor:pointer}
+#ksplash.out{opacity:0;transform:scale(1.04)}
+#ksplash svg{width:112px;height:112px;overflow:visible}
+#ksplash .r{fill:none;stroke:url(#lsg);stroke-width:6.5;stroke-linecap:round;stroke-dasharray:190;stroke-dashoffset:190;transform:rotate(-45deg);transform-origin:50px 51px;animation:lsR 1.15s .15s cubic-bezier(.65,0,.35,1) forwards}
+#ksplash .d{fill:url(#lsg);opacity:0;transform:scale(.2);transform-origin:71.2px 29.8px;animation:lsD .55s 1.05s cubic-bezier(.2,1.4,.4,1) forwards}
+#ksplash .h{opacity:0;animation:lsH 1.4s 1.15s ease forwards}
+#ksplash h1{margin:22px 0 0;font:400 46px/1 'Lumo Serif',Georgia,serif;letter-spacing:-.01em;opacity:0;transform:translateY(8px);animation:lsT .6s 1.25s cubic-bezier(.2,.8,.2,1) forwards;color:#F2DDA6}
+#ksplash p{margin:10px 0 0;font:500 14px 'Lumo Sans',-apple-system,sans-serif;color:#8E8A82;letter-spacing:.02em;opacity:0;animation:lsT .6s 1.45s ease forwards}
+@keyframes lsR{to{stroke-dashoffset:0}}@keyframes lsD{to{opacity:1;transform:scale(1)}}@keyframes lsH{to{opacity:1}}@keyframes lsT{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){#ksplash *{animation-duration:.01s!important;animation-delay:0s!important}}
+</style>
+<svg viewBox="0 0 100 100" role="img" aria-label="Lumo"><defs><linearGradient id="lsg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6E3B0"/><stop offset=".55" stop-color="#D9B56C"/><stop offset="1" stop-color="#9C7A3C"/></linearGradient><radialGradient id="lsh"><stop offset="0" stop-color="#F6E3B0" stop-opacity=".6"/><stop offset="1" stop-color="#F6E3B0" stop-opacity="0"/></radialGradient></defs>
+<circle class="h" cx="71.2" cy="29.8" r="24" fill="url(#lsh)"/><circle class="r" cx="50" cy="51" r="30"/><circle class="d" cx="71.2" cy="29.8" r="10"/></svg>
+<h1>Lumo</h1><p>Ton argent, en pleine lumière.</p>
+<script>
+(function(){var s=document.getElementById('ksplash');if(!s)return;window.__ksp=1;var done=0;
+function end(){if(done)return;done=1;s.classList.add('out');setTimeout(function(){s.remove();window.__ksp=0;try{window.dispatchEvent(new Event('ksplashdone'))}catch(e){}},500)}
+var rm=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;setTimeout(end,rm?500:2400);s.addEventListener('click',end);})();
+</script></div>
