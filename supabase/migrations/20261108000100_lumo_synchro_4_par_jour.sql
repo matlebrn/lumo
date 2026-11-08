@@ -4,12 +4,10 @@
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
 
-do $$ begin perform cron.unschedule(jobname) from cron.job where jobname like 'lumo-synchro-%'; end $$;
-
 select cron.schedule('lumo-synchro-' || h, '5 ' || h || ' * * *', $cmd$
   select net.http_post(
-    url := 'https://yrpytugfiibaqaxrfoiw.supabase.co/functions/v1/bank/sync',
-    headers := jsonb_build_object('Content-Type', 'application/json', 'x-kopek', (select token from public.kopek_conf where id = 1)),
+    url := 'https://yyxudhwlduznoteuddmp.supabase.co/functions/v1/bank/sync',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-lumo', (select token from public.lumo_conf where id = 1)),
     body := '{}'::jsonb,
     timeout_milliseconds := 120000
   );

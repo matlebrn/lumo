@@ -17,6 +17,10 @@ TXT = [  # textes visibles : couple → perso
     ('Qui paie quoi, sans calcul', 'Un tableau simple, comme sur Excel'),
     ('Kopek Solo', 'Lumo'), ('Kopek Duo', 'Lumo'),
     ('Kopek', 'Lumo'), ('Kopi', 'Lumi'),
+    # serveur propre à Lumo : aucune adresse, clé, table ou réglage partagé avec une autre appli
+    ('yrpytugfiibaqaxrfoiw', 'yyxudhwlduznoteuddmp'),
+    ('sb_publishable_nwywQU1u1dVgxHeA6sqaWA_bZJsFbFM', 'sb_publishable_uUzzvK1hb5_AQucx23BC2g_6jyLnP_Q'),
+    ('kopek', 'lumo'), ('kopi', 'lumi'),
 ]
 
 def index():
@@ -82,10 +86,11 @@ def main():
            "icons": [{"src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png"}, {"src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}]}
     for v in ('', '-vert', '-noir'): json.dump(man, open(os.path.join(P, f'manifest{v}.webmanifest'), 'w'), ensure_ascii=False)
     ver = hashlib.sha1(''.join(out.values()).encode()).hexdigest()[:10]
-    sw = rd('base/sw.js').replace("Kopek", "Lumo")
+    sw = rd("base/sw.js").replace("Kopek", "Lumo").replace("kopek", "lumo")
     sw = re.sub(r"const V = '[^']*'", f"const V = 'lumo-{ver}'", sw, count=1)
     open(os.path.join(P, 'sw.js'), 'w').write(sw)
-    left = sum(s.count('Kopek') + s.count('Kopi') for s in out.values())
+    left = sum(s.lower().count('kopek') + s.count('yrpytugfiibaqaxrfoiw') for s in out.values())
+    vj = os.path.join(R, 'vercel.json'); v = open(vj).read().replace('yrpytugfiibaqaxrfoiw', 'yyxudhwlduznoteuddmp'); open(vj, 'w').write(v)
     print('ok', ver, '· mentions Kopek/Kopi restantes :', left)
 
 main()

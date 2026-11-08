@@ -1,4 +1,4 @@
-// Kopek · connexion bancaire via Enable Banking (mode gratuit « comptes perso »)
+// Lumo · connexion bancaire via Enable Banking (mode gratuit « comptes perso »)
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const EB = "https://api.enablebanking.com";
@@ -82,7 +82,7 @@ async function seal(sl: NonNullable<Sealer>, obj: unknown) {
 
 // ---------- helpers ----------
 const txt = (body: string, status = 200) => new Response(body, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-async function token() { const { data } = await db.from("kopek_conf").select("token").eq("id", 1).single(); return data?.token as string; }
+async function token() { const { data } = await db.from("lumo_conf").select("token").eq("id", 1).single(); return data?.token as string; }
 async function log(ok: boolean, msg: string) { await db.from("eb_sync_log").insert({ ok, msg: msg.slice(0, 900) }); }
 const day = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -169,8 +169,8 @@ async function syncAll(only?: string, ph?: Record<string, string>, userId?: stri
   return msg;
 }
 
-// ---------- appli Kopek : routes réservées à l'utilisateur connecté ----------
-const ORIGIN_OK = /^(https:\/\/(kopek|lumo)[a-z0-9-]*\.vercel\.app|http:\/\/localhost(:\d+)?|http:\/\/127\.0\.0\.1(:\d+)?)$/;
+// ---------- appli Lumo : routes réservées à l'utilisateur connecté ----------
+const ORIGIN_OK = /^(https:\/\/lumo[a-z0-9-]*\.vercel\.app|http:\/\/localhost(:\d+)?|http:\/\/127\.0\.0\.1(:\d+)?)$/;
 function cors(req: Request, r: Response) {
   const o = req.headers.get("origin") ?? "";
   if (ORIGIN_OK.test(o)) { r.headers.set("Access-Control-Allow-Origin", o); r.headers.set("Vary", "Origin"); }
@@ -196,7 +196,7 @@ async function userRoute(req: Request, path: string): Promise<Response> {
   if (path === "/u/ticket") {
     const kind = body.kind === "live" ? "live" : "go";
     const t = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, "0")).join("");
-    await db.from("kopek_tickets").insert({ t, kind, exp: new Date(Date.now() + 15 * 60e3).toISOString(), user_id: uid });
+    await db.from("lumo_tickets").insert({ t, kind, exp: new Date(Date.now() + 15 * 60e3).toISOString(), user_id: uid });
     return Response.json({ ok: true, t });
   }
   if (path === "/u/sync") {
@@ -269,7 +269,7 @@ async function userRoute(req: Request, path: string): Promise<Response> {
     return Response.json({ ok: true, msg });
   }
   if (path === "/u/forget") {
-    // supprime définitivement le compte Kopek et toutes ses données
+    // supprime définitivement le compte Lumo et toutes ses données
     for (const s of await mySessions(uid)) {
       try { await fetch(`${EB}/sessions/${s.session_id}`, { method: "DELETE", headers: { Authorization: `Bearer ${await jwt()}` } }); } catch { /* */ }
       const { data: A } = await db.from("eb_accounts").select("uid").eq("session_id", s.session_id);
@@ -294,27 +294,27 @@ Deno.serve(async (req) => {
   try {
     if (path === "/callback") {
       const code = u.searchParams.get("code"), state = u.searchParams.get("state") ?? "";
-      if (u.searchParams.get("error")) return txt(`Connexion annulée.\n\n${u.searchParams.get("error_description") || u.searchParams.get("error") || ""}\n\nFerme cette page et réessaie depuis Kopek.`);
+      if (u.searchParams.get("error")) return txt(`Connexion annulée.\n\n${u.searchParams.get("error_description") || u.searchParams.get("error") || ""}\n\nFerme cette page et réessaie depuis Lumo.`);
       const { data: st } = await db.from("eb_states").select("*").eq("state", state).maybeSingle();
       const stUser = st?.user_id ?? null;
-      if (!st || !code || (st.created_at && Date.now() - new Date(st.created_at).getTime() > 45 * 60e3)) return txt("Lien expiré. Recommence depuis Kopek.", 400);
+      if (!st || !code || (st.created_at && Date.now() - new Date(st.created_at).getTime() > 45 * 60e3)) return txt("Lien expiré. Recommence depuis Lumo.", 400);
       await db.from("eb_states").delete().eq("state", state);
       const s = await eb("/sessions", { method: "POST", body: JSON.stringify({ code }) });
       await db.from("eb_sessions").upsert({ session_id: s.session_id, bank: st.bank, country: st.country, valid_until: s.access?.valid_until ?? null, status: "AUTHORIZED", accounts: s.accounts ?? [], ...(st.owner ? { owner: st.owner } : {}), ...(stUser ? { user_id: stUser } : {}) });
       const msg = await syncAll(s.session_id);
-      return txt(`✓ ${st.bank} est connectée à Kopek.\n\n${msg}\n\nTu peux fermer cette page et retourner dans Kopek : touche « Synchroniser mes banques ».`);
+      return txt(`✓ ${st.bank} est connectée à Lumo.\n\n${msg}\n\nTu peux fermer cette page et retourner dans Lumo : touche « Synchroniser mes banques ».`);
     }
 
     // liens ouverts dans le navigateur (/go, /live) : ticket à usage unique, valable 15 min — le jeton principal ne circule jamais dans une URL
     if (path === "/go" || path === "/live") {
       const t = u.searchParams.get("t") ?? "";
-      const { data: tk } = t ? await db.from("kopek_tickets").select("*").eq("t", t).maybeSingle() : { data: null };
-      if (!tk || tk.used || new Date(tk.exp).getTime() < Date.now() || tk.kind !== path.slice(1)) return txt("Lien expiré ou déjà utilisé. Recommence depuis Kopek.", 401);
-      await db.from("kopek_tickets").update({ used: true }).eq("t", t);
+      const { data: tk } = t ? await db.from("lumo_tickets").select("*").eq("t", t).maybeSingle() : { data: null };
+      if (!tk || tk.used || new Date(tk.exp).getTime() < Date.now() || tk.kind !== path.slice(1)) return txt("Lien expiré ou déjà utilisé. Recommence depuis Lumo.", 401);
+      await db.from("lumo_tickets").update({ used: true }).eq("t", t);
       tkOwner = tk.owner ?? null;
       tkUser = tk.user_id ?? null;
     } else {
-      const k = req.headers.get("x-kopek") ?? "";
+      const k = req.headers.get("x-lumo") ?? "";
       const tok = await token();
       if (!k || !tok || k !== tok) return new Response("Accès refusé", { status: 401 });
     }
@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
       const { data: S2 } = await db.from("eb_sessions").select("session_id,last_sync").neq("status", "REVOKED");
       const recent = (S2 ?? []).every((x: any) => x.last_sync && Date.now() - new Date(x.last_sync).getTime() < 60e3);
       const msg = recent ? "Déjà synchronisé il y a moins d’une minute." : await syncAll(undefined, ph, tkUser ?? undefined);
-      return txt(`✓ Synchro en direct terminée.\n\n${msg}\n\nRetourne dans Kopek : tes opérations arrivent à l’ouverture (ou touche « Synchroniser mes banques »).`);
+      return txt(`✓ Synchro en direct terminée.\n\n${msg}\n\nRetourne dans Lumo : tes opérations arrivent à l’ouverture (ou touche « Synchroniser mes banques »).`);
     }
 
     if (path === "/banks") {
@@ -374,11 +374,11 @@ Deno.serve(async (req) => {
       const { data } = await db.from("eb_sessions").select("bank,valid_until,status,last_sync,error");
       return Response.json({ ok: true, sessions: data });
     }
-    return new Response("Kopek bank", { status: 404 });
+    return new Response("Lumo bank", { status: 404 });
   } catch (e) {
     const m = (e as Error).message;
     await log(false, `${path} : ${m}`).catch(() => {});
     if (path === "/sync" || path === "/banks" || path === "/status") return Response.json({ ok: false, msg: m }, { status: 500 });
-    return txt(`Oups : ${m}\n\nFerme cette page et réessaie depuis Kopek.`, 500);
+    return txt(`Oups : ${m}\n\nFerme cette page et réessaie depuis Lumo.`, 500);
   }
 });

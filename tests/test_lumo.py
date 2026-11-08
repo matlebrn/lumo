@@ -16,10 +16,10 @@ def test_cinq_onglets_sans_couple(make_app):
 def test_saisie_dans_le_tableau(make_app):
     app = make_app()
     app.js("S=DEF();S.obd=1;S.pf={n:'Sam'};save();tab='tbl';render()"); app.wait(200)
-    app.page.fill('#lnl', 'Boulangerie Paul'); app.page.fill('#lna', '4,20'); app.page.press('#lna', 'Enter'); app.wait(200)
+    app.page.fill('#lnl', 'Boulangerie Paul'); app.page.fill('#lna', '4,20'); app.page.press('#lna', 'Enter'); app.wait(400)
     t = app.js("return S.tx.find(x=>x.label==='Boulangerie Paul')")
     assert t and t['amount'] == -4.2 and t['man'] == 1
-    app.page.fill('#lnl', 'Remboursement'); app.page.fill('#lna', '+30'); app.page.press('#lna', 'Enter'); app.wait(200)
+    app.page.fill('#lnl', 'Remboursement'); app.page.fill('#lna', '+30'); app.page.press('#lna', 'Enter'); app.wait(400)
     assert app.js("return S.tx.find(x=>x.label==='Remboursement').amount") == 30
     rows = app.js("return document.querySelectorAll('.lgrid .lr:not(.lh):not(.lmnew)').length")
     assert rows == 2

@@ -1,5 +1,5 @@
 /* Lumo : mise en cache de l'appli pour un démarrage instantané (les données, elles, ne sont jamais mises en cache ici) */
-const V = 'lumo-cadc46f73f', SHELL = ['/', '/boot.js', '/vendor/supabase.js', '/fonts/fonts.css', '/manifest.webmanifest', '/icons/icon-192.png'];
+const V = 'lumo-9f6b3abeb0', SHELL = ['/', '/boot.js', '/vendor/supabase.js', '/fonts/fonts.css', '/manifest.webmanifest', '/icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(K => Promise.all(K.filter(k => k !== V).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
@@ -18,7 +18,7 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(L => {
     const c = L.find(x => new URL(x.url).origin === location.origin);
-    if (c) { c.postMessage({ kopek: 'go' }); return c.focus(); }
+    if (c) { c.postMessage({ lumo: 'go' }); return c.focus(); }
     return self.clients.openWindow('/');
   }));
 });

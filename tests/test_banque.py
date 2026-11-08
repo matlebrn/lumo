@@ -36,4 +36,4 @@ def test_code_oublie(make_app):
     app.js("window.__out=0;KSA.logout=()=>{window.__out=1};S=DEF();S.obd=1;S.pin=await kPinMake('8361');save();locked=true;renderLock()")
     assert app.js("return !!document.getElementById('kforgot')")
     app.js("kForgot()"); app.js("await kForgotGo()"); app.wait(200)
-    assert app.js("return window.__out===1 && localStorage.getItem('kopek-pinreset')===PKEY")
+    assert app.js("return window.__out===1 && localStorage.getItem('lumo-pinreset')===PKEY")
