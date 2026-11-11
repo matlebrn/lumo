@@ -164,6 +164,13 @@
   const suggestions = () => S.analyse.suggestions.filter((s) => !(S.d.profil.ignores || []).includes(s.cle));
 
   /* ---------- ce que Lumo dit d'un projet ---------- */
+  function endettement(p, c) { // mensualités des projets ÷ revenus (une banque compte environ 70 % des loyers)
+    const revenus = S.sim.mensuel.revenus + (p.type === 'investissement' ? 0.7 * M.n(p.params.revenu) : 0);
+    if (!revenus || !c.mensualite) return null;
+    let m = c.mensualite;
+    for (const q of S.d.projets) if (q.id !== p.id && q.actif !== false && S.sim.projets[q.id]) m += S.sim.projets[q.id].chiffres.mensualite || 0;
+    return (m / revenus) * 100;
+  }
   function avis(p, r) {
     const x = p.params || {}, c = r.chiffres, faits = [];
     const garde = S.sim.coussin > 0 ? 'garder ton coussin' : 'ne pas passer dans le rouge';
@@ -177,7 +184,12 @@
       if (r.tot && r.tot !== r.k0) faits.push(`Sans risque à partir de <b>${moisLong(S.sim.mois(r.tot))}</b>.`);
       if (r.k0 > 1) faits.push(`Ou mets <b>${eur(r.effort)} de plus par mois</b> de côté d’ici là.`);
     };
-    const credit = () => { if (c.mensualite) faits.push(`Crédit : <b>${eur(c.mensualite)} par mois</b> pendant ${duree(c.duree)}${c.coutCredit > 0 ? `, dont ${eur(c.coutCredit)} d’intérêts` : ''}.`); };
+    const dette = () => {
+      const t = endettement(p, c); if (t == null) return;
+      faits.push(`Les crédits de tes projets pèsent <b>${pct(t)}</b> de tes revenus. ${t > 35 ? 'Au-delà de 35 %, une banque refuse en général.' : 'Les banques acceptent en général jusqu’à 35 %.'}`);
+      if (t > 35 && ton === 'bon') { ton = 'alerte'; court = 'Crédit trop lourd'; }
+    };
+    const credit = () => { if (c.mensualite) { faits.push(`Crédit : <b>${eur(c.mensualite)} par mois</b> pendant ${duree(c.duree)}${c.coutCredit > 0 ? `, dont ${eur(c.coutCredit)} d’intérêts` : ''}.`); dette(); } };
 
     if (p.type === 'achat' || p.type === 'investissement') {
       const inv = p.type === 'investissement';
@@ -214,6 +226,7 @@
       faits.push(`Pendant ce temps, il te reste <b>${eur(reste)} par mois</b> une fois tout payé.`);
       if (reste < 0) { ton = 'rouge'; court = 'Trop lourd'; }
       else if (!r.ok) { ton = 'alerte'; court = 'Trop juste'; faits.push(`Tu passerais sous la limite : il manquerait <b>${eur(r.manque)}</b> pour ${garde}.`); }
+      dette();
     }
     return { ton, titre, court, faits };
   }
@@ -258,7 +271,7 @@
       </svg>
     </div>
     <div class="lecture" id="lecture"></div>
-    ${ecart ? '<div class="legende"><span><i></i>Avec tes projets</span><span><i class="tirets"></i>Sans</span></div>' : ''}`;
+    <div class="legende">${ecart ? '<span><i></i>Avec tes projets</span><span><i class="tirets"></i>Sans</span>' : ''}<button class="lien" data-a="detail" style="margin-left:auto">Voir mois par mois</button></div>`;
   }
   function lecture(k) {
     const el = $('#lecture'); if (!el) return;
@@ -284,6 +297,36 @@
     const nums = ligne.getAttribute('d').match(/-?\d+(\.\d+)?/g); return +nums[k * 2 + 1];
   }
 
+  /* ---------- ce qui arrive : les dates qui comptent sur la période affichée ---------- */
+  function evenements(h) {
+    const sim = S.sim, E = [], dedans = (k) => k >= 1 && k <= h;
+    for (const p of S.d.projets.filter((p) => p.actif !== false)) {
+      const r = sim.projets[p.id]; if (!r || r.k0 == null) continue;
+      const c = r.chiffres;
+      if (dedans(r.k0)) E.push({ k: r.k0, t: esc(p.nom), d: p.type === 'changement' ? `${eur(c.parMois, true)} par mois` : p.type === 'credit' ? `${eur(-c.mensualite, true)} par mois` : eur(r.d[r.k0], true) });
+      const fin = c.mensualite && c.duree ? r.k0 + c.duree + (p.type === 'credit' ? 0 : 1) : null;
+      if (fin && dedans(fin)) E.push({ k: fin, t: `Crédit fini · ${esc(p.nom)}`, d: `${eur(c.mensualite, true)} par mois` });
+    }
+    for (const f of S.d.flux) {
+      const fin = M.lireYM(f.fin), deb = M.lireYM(f.debut), v = M.parMois(f) * (f.sens === 'revenu' ? 1 : -1);
+      if (fin != null && dedans(fin + 1 - sim.t0)) E.push({ k: fin + 1 - sim.t0, t: `Fin · ${esc(f.nom)}`, d: `${eur(-v, true)} par mois` });
+      if (deb != null && dedans(deb - sim.t0)) E.push({ k: deb - sim.t0, t: `Début · ${esc(f.nom)}`, d: `${eur(v, true)} par mois` });
+      if (f.frequence === 'an') for (let k = 1; k <= Math.min(h, 12); k++) { const x = M.fluxDuMois(f, sim.t0 + k, sim.t0); if (x) E.push({ k, t: esc(f.nom), d: eur(x, true) }); }
+    }
+    if (sim.decouvert != null && dedans(sim.decouvert)) E.push({ k: sim.decouvert, t: 'Comptes dans le rouge', d: eur(sim.avec[sim.decouvert]), ton: 'moins' });
+    else if (sim.sousCoussin != null && dedans(sim.sousCoussin)) E.push({ k: sim.sousCoussin, t: 'Coussin entamé', d: eur(sim.avec[sim.sousCoussin]), ton: 'moins' });
+    return E.sort((a, b) => a.k - b.k);
+  }
+  function feuilleDetail() {
+    const sim = S.sim, h = S.horizon;
+    let lignes = '';
+    for (let k = 1; k <= h; k++) {
+      const abs = sim.t0 + k, bas = sim.avec[k] < 0 ? 'moins' : sim.coussin && sim.avec[k] < sim.coussin ? 'or' : '';
+      lignes += `<div class="mois-ligne"><span>${COURT[abs % 12]} ${Math.floor(abs / 12)}</span><span class="plus">${eur(sim.entrees[k], true)}</span><span class="moins">${eur(-sim.sorties[k])}</span><b class="${bas}">${eur(sim.avec[k])}</b></div>`;
+    }
+    return coque('Mois par mois', `<div class="mois-ligne tete"><span>Mois</span><span>Rentrées</span><span>Sorties</span><span>Solde</span></div>${lignes}<p class="note">Solde à la fin de chaque mois, projets comptés.</p>`);
+  }
+
   /* ---------- écrans ---------- */
   const bandeauExemple = () => (S.exemple ? `<div class="bandeau"><span>Exemple : rien n’est enregistré.</span><button data-a="creer-compte">Créer mon compte</button></div>` : '');
   const entete = (titre, sous, bouton) => `<div class="entete"><div><h1>${titre}</h1>${sous ? `<div class="sous">${sous}</div>` : ''}</div>${bouton || ''}</div>`;
@@ -299,7 +342,7 @@
     const sug = suggestions();
     const max = Math.max(m.revenus, m.fixes + m.courant, 1);
     const barre = (nom, v, cls) => `<div class="barre"><span>${nom}</span><span>${eur(v)}</span><div class="rail"><i class="${cls}" style="width:${Math.min(100, (v / max) * 100).toFixed(1)}%"></i></div></div>`;
-    const projets = d.projets.filter((p) => p.actif !== false);
+    const projets = d.projets.filter((p) => p.actif !== false), ev = evenements(h);
     return `<div class="ecran">
       ${bandeauExemple()}
       ${entete(d.profil.prenom ? `Bonjour ${esc(d.profil.prenom)}` : 'Ta prévision', '', `<button class="rond" data-a="reglages" aria-label="Réglages">${I.reglages}</button>`)}
@@ -317,6 +360,7 @@
         <div class="barres">${barre('Revenus', m.revenus, '')}${barre('Dépenses fixes', m.fixes, 'gris')}${barre('Dépenses courantes', m.courant, 'gris')}</div>
         <div class="reste"><span>Il te reste</span><b class="${m.reste >= 0 ? 'plus' : 'moins'}">${eur(m.reste)}</b></div>
       </div>
+      ${ev.length ? `<div class="titre"><span>Ce qui arrive</span></div><div class="carte serree">${ev.slice(0, 8).map((e) => `<div class="ligne"><div class="corps"><div class="nom">${e.t}</div><div class="detail">${moisLong(sim.mois(e.k))}</div></div><div class="somme ${e.ton || (e.d.startsWith('+') ? 'plus' : '')}">${e.d}</div></div>`).join('')}</div>${ev.length > 8 ? `<p class="note">Et ${ev.length - 8} autre${ev.length > 9 ? 's' : ''} date${ev.length > 9 ? 's' : ''} plus loin.</p>` : ''}` : ''}
       <div class="titre"><span>Tes projets</span><button data-a="nouveau-projet">Ajouter</button></div>
       ${projets.length ? `<div class="carte serree">${projets.map((p) => { const r = sim.projets[p.id], a = avis(p, r); return `<button class="ligne" data-a="projet" data-id="${p.id}"><div class="corps"><div class="nom">${esc(p.nom)}</div><div class="detail">${a.titre}</div></div>${etiquette(a)}</button>`; }).join('')}</div>`
         : `<div class="carte"><p class="vide">Une voiture, un appartement, un crédit ? Ajoute un projet : Lumo te dit quand c’est possible et ce que ça change.</p><button class="bouton" data-a="nouveau-projet">Simuler un projet</button></div>`}
@@ -536,6 +580,8 @@
       + bascule('params.verse', b, 'L’argent arrive sur mon compte', 'Oui pour un prêt personnel. Non si le crédit paie directement un achat.');
     corps += `<div class="apercu" id="apercu">${projetVide(b) ? '<div class="faits">Remplis les chiffres : Lumo te répond en direct.</div>' : apercuProjet(b)}</div>`;
     corps += bascule('actif', b, 'Compter dans ma prévision', 'Éteins pour garder l’idée sans toucher à ta courbe.');
+    const rang = S.d.projets.findIndex((p) => p.id === b.id), total = S.d.projets.length;
+    if (!F.nouveau && total > 1) corps += `<div class="champ"><span>Priorité : ${rang + 1}${rang ? 'e' : 'er'} sur ${total}. Lumo finance les projets dans cet ordre.</span><div class="choix"><button type="button" data-a="deplacer" data-sens="-1" ${rang === 0 ? 'disabled' : ''}>Passer avant</button><button type="button" data-a="deplacer" data-sens="1" ${rang === total - 1 ? 'disabled' : ''}>Passer après</button></div></div>`;
     corps += `<button class="bouton" data-a="enregistrer-projet">Enregistrer</button>${F.nouveau ? '' : '<button class="bouton danger" data-a="supprimer-projet">Supprimer ce projet</button>'}`;
     return coque(F.nouveau ? T.nom : esc(b.nom || T.nom), corps);
   }
@@ -604,7 +650,7 @@
   function feuilleMdp() {
     return coque('Nouveau mot de passe', `<form data-form="mdp"><label class="champ"><span>Choisis un mot de passe</span><div class="saisie"><input name="mdp" type="password" autocomplete="new-password" placeholder="8 caractères ou plus" required minlength="8"></div></label><button class="bouton">Enregistrer</button></form>`);
   }
-  const FEUILLES = { projet: feuilleProjet, types: () => coque('Nouveau projet', listeTypes()), flux: feuilleFlux, courant: feuilleCourant, compte: feuilleCompte, reglages: feuilleReglages, banques: feuilleBanques, confirmer: feuilleConfirmer, mdp: feuilleMdp };
+  const FEUILLES = { projet: feuilleProjet, types: () => coque('Nouveau projet', listeTypes()), flux: feuilleFlux, courant: feuilleCourant, compte: feuilleCompte, reglages: feuilleReglages, detail: feuilleDetail, banques: feuilleBanques, confirmer: feuilleConfirmer, mdp: feuilleMdp };
   function afficherFeuille() {
     const el = $('#feuille'), F = S.feuille;
     if (!F) { el.hidden = true; el.innerHTML = ''; document.body.style.overflow = ''; return; }
@@ -659,6 +705,7 @@
     horizon: (el) => { S.horizon = +el.dataset.k; afficher(); },
     fermer,
     reglages: () => ouvrir({ nom: 'reglages' }),
+    detail: () => ouvrir({ nom: 'detail' }),
     porte: (el) => { S.porte.mode = el.dataset.m; S.porte.erreur = ''; afficher(); },
     exemple: () => { S.exemple = true; S.d = null; charger(); afficher(); window.scrollTo(0, 0); },
     'creer-compte': () => { S.exemple = false; S.d = null; S.feuille = null; afficherFeuille(); S.vue = 'prevision'; S.fil = []; S.porte.mode = 'creation'; afficher(); },
@@ -692,6 +739,13 @@
       b.nom = (b.nom || '').trim() || TYPES[b.type].nom.replace(/^Un(e)? /, '').replace(/^./, (c) => c.toUpperCase());
       for (const k of ['montant', 'prix', 'frais', 'apport', 'taux', 'dureeAns', 'revenu', 'charges', 'valorisation', 'depense', 'depart', 'capital']) if (k in b.params) b.params[k] = M.n(b.params[k]);
       await ecrire('projets', b, F.nouveau); S.feuille = null; afficherFeuille(); if (F.nouveau) S.vue = 'projets'; afficher(); dire('Projet enregistré.');
+    },
+    deplacer: async (el) => {
+      const L = S.d.projets, i = L.findIndex((p) => p.id === S.feuille.brouillon.id), j = i + +el.dataset.sens;
+      if (i < 0 || j < 0 || j >= L.length) return;
+      [L[i], L[j]] = [L[j], L[i]];
+      for (const [k, p] of L.entries()) if (p.ordre !== k) { p.ordre = k; if (!S.exemple) await sb.from('projets').update({ ordre: k }).eq('id', p.id); }
+      S.feuille.brouillon.ordre = j; calculer(); afficherFeuille();
     },
     'supprimer-projet': async () => { await effacer('projets', S.feuille.brouillon.id); S.feuille = null; afficherFeuille(); afficher(); dire('Projet supprimé.'); },
 

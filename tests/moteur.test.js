@@ -128,3 +128,10 @@ test('lecture des opérations : repère le salaire et le loyer, estime le couran
   proche(b.courant, 83.4 + 212.9, 0.01);
   assert.equal(b.suggestions.length, 0);
 });
+
+test('entrées et sorties de chaque mois, projets compris', () => {
+  const s = M.simuler(base({ projets: [{ id: 'a', type: 'achat', params: { montant: 3000, mode: 'date', date: '2027-01' } }] }), JOUR);
+  proche(s.entrees[1], 2000); proche(s.sorties[1], 1500);
+  proche(s.sorties[2], 4500);
+  for (let k = 1; k <= 12; k++) proche(s.avec[k] - s.avec[k - 1], s.entrees[k] - s.sorties[k]);
+});

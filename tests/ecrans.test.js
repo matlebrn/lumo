@@ -30,6 +30,10 @@ test.after(async () => { await nav.close(); serveur.close(); });
 test('la prévision affiche un montant et une courbe', async () => {
   assert.match(await page.textContent('.hero .gros'), /\d.*€/);
   assert.ok(await page.locator('#courbe svg path').count() >= 2);
+  assert.match(await page.textContent('#app'), /Ce qui arrive/);
+  await page.click('[data-a=detail]');
+  assert.equal(await page.locator('.mois-ligne').count(), 37);
+  await page.click('[data-a=fermer]');
   await page.click('[data-a=horizon][data-k="120"]');
   assert.match(await page.textContent('.hero .phrase'), /10 ans/);
 });
@@ -45,6 +49,14 @@ test('un projet se crée et répond en direct', async () => {
   await page.fill('[data-f="params.date"]', '2026-01'); // date passée : pas de plantage
   await page.click('[data-a=enregistrer-projet]');
   await page.waitForFunction(() => document.querySelectorAll('.projet').length === 3);
+  // priorité : le studio passe avant la voiture, qui recule
+  const avant = await page.textContent('.projet >> nth=0');
+  await page.click('.projet >> nth=1');
+  assert.match(await page.textContent('.feuille'), /pèsent/);
+  await page.click('[data-a=deplacer][data-sens="-1"]');
+  await page.click('[data-a=fermer]');
+  assert.match(await page.textContent('.projet >> nth=0'), /Studio locatif/);
+  assert.notEqual(await page.textContent('.projet >> nth=1'), avant);
 });
 
 test('le budget se modifie et change le reste mensuel', async () => {

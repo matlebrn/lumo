@@ -112,7 +112,12 @@
     const coussin = Math.max(0, n(etat.coussin)), solde0 = n(etat.solde);
     const flux = (etat.flux || []).filter((f) => f.actif !== false);
     const netBase = new Array(H + 1).fill(0);
-    for (let k = 1; k <= H; k++) { let s = -n(etat.courant); for (const f of flux) s += fluxDuMois(f, t0 + k, t0); netBase[k] = s; }
+    const entrees = new Array(H + 1).fill(0), sorties = new Array(H + 1).fill(0);
+    for (let k = 1; k <= H; k++) {
+      sorties[k] = n(etat.courant);
+      for (const f of flux) { const v = fluxDuMois(f, t0 + k, t0); if (v > 0) entrees[k] += v; else sorties[k] -= v; }
+      netBase[k] = entrees[k] - sorties[k];
+    }
     const cumul = (net) => { const b = [solde0]; for (let k = 1; k <= H; k++) b[k] = b[k - 1] + net[k]; return b; };
     const sans = cumul(netBase);
 
@@ -148,7 +153,7 @@
     const liste = etat.projets || [];
     for (const p of liste.filter((p) => p.actif !== false)) {
       const r = evaluer(p, net); resultats[p.id] = r;
-      if (r.d) for (let k = 1; k <= H; k++) net[k] += r.d[k];
+      if (r.d) for (let k = 1; k <= H; k++) { net[k] += r.d[k]; if (r.d[k] > 0) entrees[k] += r.d[k]; else sorties[k] -= r.d[k]; }
     }
     for (const p of liste.filter((p) => p.actif === false)) resultats[p.id] = evaluer(p, net);
     const avec = cumul(net);
@@ -161,7 +166,7 @@
     const revenus = flux.filter((f) => f.sens === 'revenu').reduce((s, f) => s + parMois(f), 0);
     const fixes = flux.filter((f) => f.sens !== 'revenu').reduce((s, f) => s + parMois(f), 0);
     return {
-      H, t0, solde: solde0, coussin, sans, avec, projets: resultats, decouvert, sousCoussin,
+      H, t0, solde: solde0, coussin, sans, avec, entrees, sorties, projets: resultats, decouvert, sousCoussin,
       mensuel: { revenus, fixes, courant: n(etat.courant), reste: revenus - fixes - n(etat.courant) },
       mois: (k) => ecrireYM(t0 + k),
     };
