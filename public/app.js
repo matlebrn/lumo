@@ -445,7 +445,7 @@
   const basDuFil = () => requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
 
   /* ---------- porte d'entrée : connexion, création de compte ---------- */
-  const LOGO = `<svg class="logo" viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="or2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F6E3B0"/><stop offset=".55" stop-color="#D9B56C"/><stop offset="1" stop-color="#9C7A3C"/></linearGradient></defs><circle cx="58" cy="62" r="34" fill="none" stroke="url(#or2)" stroke-width="7"/><circle cx="83" cy="37" r="11" fill="url(#or2)"/></svg>`;
+  const LOGO = `<img class="logo" src="/icons/logo-mark.png?v=1" alt="" width="120" height="60">`;
   function vuePorte() {
     const p = S.porte;
     const err = p.erreur ? `<p class="erreur">${esc(p.erreur)}</p>` : '';

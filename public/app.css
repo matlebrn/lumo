@@ -16,7 +16,7 @@ h1, h2, h3, p { margin: 0; }
 
 #app { max-width: 520px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
 .demarrage { flex: 1; display: grid; place-items: center; min-height: 100vh; }
-.demarrage svg { width: 84px; animation: pouls 1.6s ease-in-out infinite; }
+.demarrage img { width: 140px; height: auto; animation: pouls 1.6s ease-in-out infinite; }
 @keyframes pouls { 50% { opacity: .45; transform: scale(.96); } }
 
 /* ---------- structure ---------- */
@@ -131,7 +131,7 @@ h1, h2, h3, p { margin: 0; }
 #feuille { position: fixed; inset: 0; z-index: 20; background: rgba(0, 0, 0, .6); display: flex; align-items: flex-end; justify-content: center; }
 .feuille { width: 100%; max-width: 520px; max-height: 94vh; max-height: 94dvh; background: #0E0D10; border: 1px solid var(--trait); border-bottom: 0; border-radius: 26px 26px 0 0; display: flex; flex-direction: column; animation: monte .22s ease-out; }
 @keyframes monte { from { transform: translateY(40px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .feuille, .demarrage svg { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .feuille, .demarrage img { animation: none; } }
 .feuille header { display: flex; justify-content: space-between; align-items: center; padding: 18px 18px 6px; }
 .feuille header h2 { font-family: var(--serif); font-weight: 400; font-size: 26px; }
 .feuille .dedans { padding: 12px 18px calc(var(--bas) + 20px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
@@ -156,7 +156,7 @@ h1, h2, h3, p { margin: 0; }
 
 /* ---------- accueil, connexion ---------- */
 .porte { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: calc(var(--haut) + 30px) 24px calc(var(--bas) + 30px); }
-.porte .logo { width: 64px; margin-bottom: 22px; }
+.porte .logo { width: 120px; height: auto; margin-bottom: 22px; }
 .porte h1 { font-family: var(--serif); font-weight: 400; font-size: 42px; line-height: 1.05; letter-spacing: -.02em; }
 .porte h1 em { color: var(--or); font-style: italic; }
 .porte .accroche { color: var(--doux); margin: 14px 0 28px; font-size: 16.5px; }
