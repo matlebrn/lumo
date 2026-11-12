@@ -444,6 +444,39 @@
   }
   const basDuFil = () => requestAnimationFrame(() => window.scrollTo(0, document.body.scrollHeight));
 
+  /* ---------- accueil : 3 pages à la toute première ouverture ---------- */
+  const CLE_ACCUEIL = 'lumo:accueil-vu';
+  const accueilVu = () => { try { return localStorage.getItem(CLE_ACCUEIL) === '1'; } catch { return true; } };
+  const marquerAccueil = () => { try { localStorage.setItem(CLE_ACCUEIL, '1'); } catch { /* stockage indisponible */ } };
+  const PAGES = [
+    { titre: 'Ton argent, <em>dans le temps.</em>', texte: 'Lumo relie ta banque et dessine ce que tu auras sur ton compte dans 1 an, 5 ans, 10 ans.',
+      visuel: `<div class="ac-visuel ac-courbe"><svg viewBox="0 0 300 170" aria-hidden="true"><defs><linearGradient id="acor" x1="0" x2="1"><stop offset="0" stop-color="#9C7A3C"/><stop offset="1" stop-color="#F6E3B0"/></linearGradient><linearGradient id="acfond" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(217,181,108,.28)"/><stop offset="1" stop-color="rgba(217,181,108,0)"/></linearGradient></defs>
+        <path d="M10 140 C 70 132, 100 118, 140 100 S 220 52, 270 34 L270 160 L10 160Z" fill="url(#acfond)"/>
+        <path class="ac-trace" d="M10 140 C 70 132, 100 118, 140 100 S 220 52, 270 34" fill="none" stroke="url(#acor)" stroke-width="4" stroke-linecap="round"/>
+        <path d="M10 140 C 80 136, 160 128, 270 112" fill="none" stroke="rgba(243,239,230,.25)" stroke-width="2" stroke-dasharray="5 6"/>
+        <circle class="ac-point" cx="270" cy="34" r="7" fill="#F6E3B0"/></svg>
+        <div class="ac-axe"><span>Aujourd’hui</span><span>Dans 10 ans</span></div></div>` },
+    { titre: 'Tes projets, <em>chiffrés.</em>', texte: 'Une voiture, un appartement, un investissement, un crédit : Lumo te dit quand c’est possible et ce que ça change.',
+      visuel: `<div class="ac-visuel ac-projets">
+        <div class="ac-carte"><div><b>Voiture</b><span>25 000 €</span></div><span class="ac-etiq bon">Possible en mars 2028</span></div>
+        <div class="ac-carte"><div><b>Appartement locatif</b><span>Crédit sur 20 ans</span></div><span class="ac-etiq bon">Rapporte 120 € / mois</span></div>
+        <div class="ac-carte"><div><b>Tour du monde</b><span>12 000 €</span></div><span class="ac-etiq attente">Dans 3 ans et 2 mois</span></div></div>` },
+    { titre: 'Une question ? <em>Demande à Lumi.</em>', texte: 'Lumi connaît tes chiffres et répond simplement, à n’importe quelle heure.',
+      visuel: `<div class="ac-visuel ac-lumi">
+        <p class="ac-bulle moi">Je peux m’acheter une maison en 2030 ?</p>
+        <p class="ac-bulle lumi">Oui, si tu mets 450 € de côté chaque mois à partir de maintenant. Avec ton crédit auto qui se termine en 2027, ça devient plus facile.</p></div>` },
+  ];
+  function vueAccueil() {
+    const i = S.accueil || 0, p = PAGES[i], der = i === PAGES.length - 1;
+    return `<div class="accueil" data-page="${i}">
+      <div class="ac-haut">${der ? '<span></span>' : '<button class="ac-passer" data-a="accueil-fin">Passer</button>'}</div>
+      <div class="ac-page" key="${i}">${p.visuel}<h1>${p.titre}</h1><p class="accroche">${p.texte}</p></div>
+      <div class="ac-bas">
+        <div class="ac-points" role="tablist">${PAGES.map((_, k) => `<button role="tab" aria-label="Page ${k + 1}" aria-selected="${k === i}" data-a="accueil-aller" data-k="${k}"></button>`).join('')}</div>
+        <button class="bouton" data-a="${der ? 'accueil-fin' : 'accueil-suivant'}">${der ? 'Commencer' : 'Suivant'}</button>
+      </div></div>`;
+  }
+
   /* ---------- porte d'entrée : connexion, création de compte ---------- */
   const LOGO = `<img class="logo" src="/icons/logo-mark.png?v=1" alt="" width="120" height="60">`;
   function vuePorte() {
@@ -665,7 +698,7 @@
   function afficher() {
     finirIntro();
     const app = $('#app');
-    if (!S.user && !S.exemple) { app.innerHTML = vuePorte(); return; }
+    if (!S.user && !S.exemple) { app.innerHTML = accueilVu() ? vuePorte() : vueAccueil(); return; }
     if (!S.d) return;
     if (!S.exemple && !S.d.profil.pret) { app.innerHTML = vueDepart(); return; }
     const n = suggestions().length;
@@ -708,6 +741,9 @@
     reglages: () => ouvrir({ nom: 'reglages' }),
     detail: () => ouvrir({ nom: 'detail' }),
     porte: (el) => { S.porte.mode = el.dataset.m; S.porte.erreur = ''; afficher(); },
+    'accueil-suivant': () => { S.accueil = Math.min((S.accueil || 0) + 1, PAGES.length - 1); afficher(); },
+    'accueil-aller': (el) => { S.accueil = +el.dataset.k; afficher(); },
+    'accueil-fin': () => { marquerAccueil(); afficher(); window.scrollTo(0, 0); },
     exemple: () => { S.exemple = true; S.d = null; charger(); afficher(); window.scrollTo(0, 0); },
     'creer-compte': () => { S.exemple = false; S.d = null; S.feuille = null; afficherFeuille(); S.vue = 'prevision'; S.fil = []; S.porte.mode = 'creation'; afficher(); },
     oubli: async () => {
@@ -819,6 +855,16 @@
     })();
     if (quoi === 'mdp') (async () => { const { error } = await sb.auth.updateUser({ password: f.mdp.value }); if (error) return dire(traduire(error.message)); S.feuille = null; afficherFeuille(); dire('Mot de passe changé.'); })();
   });
+  let glisse = null;
+  document.addEventListener('touchstart', (e) => { if (e.target.closest('.accueil')) glisse = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend', (e) => {
+    if (glisse == null || !document.querySelector('.accueil')) return;
+    const dx = e.changedTouches[0].clientX - glisse; glisse = null;
+    if (Math.abs(dx) < 50) return;
+    const i = S.accueil || 0;
+    if (dx < 0) { if (i < PAGES.length - 1) { S.accueil = i + 1; afficher(); } }
+    else if (i > 0) { S.accueil = i - 1; afficher(); }
+  }, { passive: true });
   for (const ev of ['pointerdown', 'pointermove']) document.addEventListener(ev, (e) => { if (e.target.closest && e.target.closest('#courbe')) suivreCourbe(e); });
 
   /* ---------- démarrage ---------- */

@@ -193,3 +193,40 @@ h1, h2, h3, p { margin: 0; }
   .intro-nom { animation: none; opacity: 1; transform: none; }
   #intro.fin { animation-duration: .2s; }
 }
+
+/* Accueil : 3 pages à la première ouverture */
+.accueil { flex: 1; min-height: 100vh; display: flex; flex-direction: column; padding: calc(var(--haut) + 14px) 24px calc(var(--bas) + 24px); box-sizing: border-box; }
+.ac-haut { display: flex; justify-content: flex-end; min-height: 36px; }
+.ac-passer { color: var(--doux); font-weight: 500; padding: 8px 4px; }
+.ac-page { flex: 1; display: flex; flex-direction: column; justify-content: center; animation: ac-entre .45s ease-out both; }
+.ac-page h1 { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.05; letter-spacing: -.02em; margin: 28px 0 0; }
+.ac-page h1 em { color: var(--or); font-style: italic; }
+.ac-page .accroche { color: var(--doux); margin: 14px 0 0; font-size: 16.5px; }
+.ac-bas { display: grid; gap: 22px; }
+.ac-points { display: flex; justify-content: center; gap: 8px; }
+.ac-points button { width: 8px; height: 8px; padding: 0; border-radius: 4px; background: rgba(243, 239, 230, .2); transition: width .3s, background .3s; }
+.ac-points button[aria-selected="true"] { width: 26px; background: var(--or); }
+.ac-visuel { border-radius: 24px; background: radial-gradient(120% 90% at 85% 0%, rgba(217, 181, 108, .14), transparent 60%), var(--carte); border: 1px solid var(--trait); padding: 22px 18px; }
+.ac-courbe svg { width: 100%; display: block; overflow: visible; }
+.ac-trace { stroke-dasharray: 320; stroke-dashoffset: 320; animation: ac-trace 1.2s cubic-bezier(.65, 0, .35, 1) .2s forwards; }
+.ac-point { opacity: 0; filter: drop-shadow(0 0 10px rgba(246, 210, 122, .9)); animation: ac-allume .5s ease-out 1.25s forwards; }
+.ac-axe { display: flex; justify-content: space-between; color: var(--pale); font-size: 12px; margin-top: 6px; }
+.ac-projets { display: grid; gap: 10px; }
+.ac-carte { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--carte2); border: 1px solid var(--trait); border-radius: 16px; padding: 12px 14px; opacity: 0; animation: ac-entre .45s ease-out forwards; }
+.ac-carte:nth-child(2) { animation-delay: .15s; } .ac-carte:nth-child(3) { animation-delay: .3s; }
+.ac-carte b { display: block; font-weight: 600; font-size: 15px; }
+.ac-carte div span { color: var(--doux); font-size: 13px; }
+.ac-etiq { font-size: 12px; font-weight: 600; padding: 5px 9px; border-radius: 999px; white-space: nowrap; }
+.ac-etiq.bon { color: var(--plus); background: rgba(143, 207, 168, .12); }
+.ac-etiq.attente { color: var(--alerte); background: rgba(233, 184, 114, .12); }
+.ac-lumi { display: grid; gap: 10px; }
+.ac-bulle { margin: 0; padding: 11px 14px; border-radius: 18px; font-size: 15px; max-width: 86%; opacity: 0; animation: ac-entre .45s ease-out forwards; }
+.ac-bulle.moi { justify-self: end; background: linear-gradient(135deg, var(--or-clair), var(--or)); color: #1a1408; border-bottom-right-radius: 6px; }
+.ac-bulle.lumi { background: var(--carte2); border: 1px solid var(--trait); border-bottom-left-radius: 6px; animation-delay: .6s; }
+@keyframes ac-entre { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes ac-trace { to { stroke-dashoffset: 0; } }
+@keyframes ac-allume { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ac-page, .ac-carte, .ac-bulle, .ac-point { animation: none; opacity: 1; }
+  .ac-trace { animation: none; stroke-dashoffset: 0; }
+}
