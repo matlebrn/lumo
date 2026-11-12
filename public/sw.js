@@ -1,5 +1,5 @@
 /* Lumo : garde l'appli disponible sans réseau. On prend toujours la version en ligne d'abord ; les données ne sont jamais mises en cache. */
-const V = 'lumo-previsions-6', COQUE = ['/', '/app.css', '/app.js', '/moteur.js', '/vendor/supabase.js', '/fonts/fonts.css', '/manifest.webmanifest', '/icons/icon-192.png?v=2', '/icons/logo-mark.png?v=1'];
+const V = 'lumo-previsions-7', COQUE = ['/', '/app.css', '/app.js', '/moteur.js', '/vendor/supabase.js', '/fonts/fonts.css', '/manifest.webmanifest', '/icons/icon-192.png?v=2', '/icons/logo-mark.png?v=1'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(V).then((c) => c.addAll(COQUE)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((K) => Promise.all(K.filter((k) => k !== V).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', (e) => {

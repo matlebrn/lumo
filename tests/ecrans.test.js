@@ -27,7 +27,18 @@ test.before(async () => {
 });
 test.after(async () => { await nav.close(); serveur.close(); });
 
+test('aujourd’hui montre les comptes, le mois en cours et les opérations', async () => {
+  const t = await page.textContent('#app');
+  assert.match(t, /Sur tous tes comptes/);
+  assert.match(t, /Depuis ta paie du 28/);
+  assert.match(t, /Tu peux encore dépenser/);
+  assert.match(t, /Où part ton argent/);
+  assert.ok(await page.locator('.spark path').count() >= 2);
+  assert.equal(await page.locator('.groupe').count(), 3); // disponible, épargne, placements
+});
+
 test('la prévision affiche un montant et une courbe', async () => {
+  await page.click('.onglets [data-v=prevision]');
   assert.match(await page.textContent('.hero .gros'), /\d.*€/);
   assert.ok(await page.locator('#courbe svg path').count() >= 2);
   assert.match(await page.textContent('#app'), /Ce qui arrive/);
@@ -66,7 +77,7 @@ test('le budget se modifie et change le reste mensuel', async () => {
   await page.fill('[data-f=montant]', '200');
   await page.click('[data-a=enregistrer-flux]');
   await page.waitForFunction((a) => document.querySelector('.entete .sous').textContent !== a, avant);
-  assert.match((await page.textContent('.entete .sous')).replace(/\s/g, ''), /627€/);
+  assert.match((await page.textContent('.entete .sous')).replace(/\s/g, ''), /657€/);
 });
 
 test('les réglages et Lumi s’ouvrent, sans erreur de page', async () => {

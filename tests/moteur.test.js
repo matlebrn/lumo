@@ -135,3 +135,102 @@ test('entrées et sorties de chaque mois, projets compris', () => {
   proche(s.sorties[2], 4500);
   for (let k = 1; k <= 12; k++) proche(s.avec[k] - s.avec[k - 1], s.entrees[k] - s.sorties[k]);
 });
+
+/* ---------- argent au quotidien ---------- */
+function banque(auj, { courses = 60, livret = true } = {}) {
+  const ops = [], d = (a, m, j) => `${a}-${String(m + 1).padStart(2, '0')}-${String(j).padStart(2, '0')}`;
+  for (let k = 4; k >= 0; k--) {
+    const x = new Date(auj.getFullYear(), auj.getMonth() - k, 1), a = x.getFullYear(), m = x.getMonth();
+    const ajoute = (j, montant, libelle, compte_id = 'cc') => { const t = new Date(a, m, j); if (t <= auj) ops.push({ date: d(a, m, j), montant, libelle, compte_id }); };
+    ajoute(28, 2150, 'VIR SEPA SALAIRE TRANSPORTS MARTIN');
+    ajoute(5, -640, 'PRLV SEPA LOYER AGENCE');
+    ajoute(10, -118, 'PRLV SEPA EDF');
+    for (const j of [2, 9, 16, 23]) ajoute(j, -courses, 'CB CARREFOUR MARKET');
+    ajoute(12, -55, 'CB TOTAL ACCESS');
+    if (livret) { ajoute(29, -200, 'VIR VERS LIVRET A'); ajoute(29, 200, 'VIR DE COMPTE COURANT', 'la'); }
+  }
+  return ops;
+}
+const COMPTES = [{ id: 'cc', nom: 'Compte courant', type: 'courant', solde: 1300 }, { id: 'la', nom: 'Livret A', type: 'epargne', solde: 6400 }, { id: 'av', nom: 'Assurance vie', type: 'epargne', solde: 3000 }];
+const FLUX = [{ nom: 'Loyer', sens: 'depense', montant: 640, frequence: 'mois' }, { nom: 'Énergie', sens: 'depense', montant: 118, frequence: 'mois' }];
+
+test('catégories des libellés bancaires', () => {
+  assert.equal(M.categorie('CB CARREFOUR MARKET 12/11'), 'courses');
+  assert.equal(M.categorie('PRLV SEPA EDF CLIENTS'), 'factures');
+  assert.equal(M.categorie('CB TOTAL ACCESS DOLE'), 'carburant');
+  assert.equal(M.categorie('CB UBER EATS'), 'sorties');
+  assert.equal(M.categorie('CB NETFLIX.COM'), 'abonnements');
+  assert.equal(M.categorie('RETRAIT DAB 12/11'), 'retraits');
+  assert.equal(M.categorie('CB INCONNU SARL'), 'autres');
+});
+
+test('le mois en cours part de la dernière paie', () => {
+  const auj = new Date(2026, 10, 12);
+  const s = M.suiviMois({ comptes: COMPTES, operations: banque(auj), flux: FLUX }, auj);
+  assert.equal(s.paie.derniere, '2026-10-28');
+  assert.equal(s.paie.prochaine, '2026-11-28');
+  assert.equal(s.joursRestants, 16);
+  assert.equal(s.misDeCote, 200); // virement vers le livret : épargne, pas dépense
+  // depuis le 28/10 : courses 2/11 et 9/11, loyer, EDF, carburant
+  assert.equal(s.depense, 60 * 2 + 640 + 118 + 55);
+  assert.equal(s.aVenir.length, 0); // loyer et EDF déjà passés
+  assert.equal(s.reste, 1300);
+  assert.equal(s.parJour, Math.round(1300 / 16));
+  const courses = s.categories.find((c) => c.id === 'courses');
+  assert.equal(courses.montant, 120);
+  assert.equal(courses.habituel, 120);
+});
+
+test('prélèvements à venir et risque de découvert', () => {
+  const auj = new Date(2026, 10, 3); // avant le loyer du 5
+  const s = M.suiviMois({ comptes: [{ ...COMPTES[0], solde: 500 }, COMPTES[1]], operations: banque(auj), flux: FLUX }, auj);
+  assert.deepEqual(s.aVenir.map((x) => x.nom), ['Loyer', 'Énergie']);
+  assert.equal(s.reste, 500 - 758);
+  const A = M.alertes(s, auj);
+  assert.equal(A[0].type, 'risque');
+  assert.equal(A[0].ton, 'rouge');
+});
+
+test('dépense inhabituelle repérée au même stade du mois', () => {
+  const auj = new Date(2026, 10, 12);
+  const ops = banque(auj).map((o) => (o.libelle.includes('CARREFOUR') && o.date >= '2026-10-28' ? { ...o, montant: -150 } : o));
+  const s = M.suiviMois({ comptes: COMPTES, operations: ops, flux: FLUX }, auj);
+  const a = M.alertes(s, auj).find((x) => x.type === 'inhabituel');
+  assert.ok(a, 'alerte attendue');
+  assert.equal(a.categorie, 'courses');
+  assert.equal(a.actuel, 300);
+  assert.equal(a.habituel, 120);
+});
+
+test('paie en retard', () => {
+  const auj = new Date(2026, 11, 3); // la paie du 28/11 manque
+  const ops = banque(new Date(2026, 10, 27));
+  const s = M.suiviMois({ comptes: COMPTES, operations: ops, flux: FLUX }, auj);
+  assert.ok(M.alertes(s, auj).some((a) => a.type === 'paie'));
+});
+
+test('sans banque : mois calendaire, aucune alerte inventée', () => {
+  const auj = new Date(2026, 10, 12);
+  const s = M.suiviMois({ comptes: [{ id: 'x', nom: 'Mes comptes', type: 'courant', solde: 900 }], operations: [], flux: FLUX }, auj);
+  assert.equal(s.avecBanque, false);
+  assert.equal(s.debut, '2026-11-01');
+  assert.deepEqual(M.alertes(s, auj), []);
+});
+
+test('vue des comptes : genres et évolution sur 6 mois', () => {
+  const auj = new Date(2026, 10, 12);
+  const v = M.comptesVue(COMPTES, banque(auj), auj);
+  assert.equal(v.total, 10700);
+  assert.equal(v.parGenre.placement, 3000); // assurance vie
+  assert.equal(v.parGenre.epargne, 6400);
+  assert.equal(v.histoire.length, 6);
+  assert.equal(v.histoire[5].total, 10700);
+  assert.ok(v.histoire[4].total < v.histoire[5].total || v.histoire[4].total !== undefined);
+});
+
+test('un prélèvement annuel ne compte que dans son mois', () => {
+  const auj = new Date(2026, 10, 12);
+  const flux = [...FLUX, { nom: 'Impôts locaux', sens: 'depense', montant: 420, frequence: 'an', mois: 10 }, { nom: 'Assurance auto', sens: 'depense', montant: 380, frequence: 'an', mois: 11 }];
+  const s = M.suiviMois({ comptes: COMPTES, operations: banque(auj), flux }, auj);
+  assert.deepEqual(s.aVenir.map((x) => x.nom), ['Assurance auto']);
+});

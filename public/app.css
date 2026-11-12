@@ -28,8 +28,8 @@ h1, h2, h3, p { margin: 0; }
 .rond svg { width: 20px; height: 20px; }
 
 .onglets { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(9, 9, 10, .86); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid var(--trait); padding-bottom: var(--bas); }
-.onglets div { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); }
-.onglets button { padding: 10px 0 8px; color: var(--pale); font-size: 11px; font-weight: 500; display: grid; justify-items: center; gap: 3px; position: relative; }
+.onglets div { max-width: 520px; margin: 0 auto; display: grid; grid-template-columns: repeat(5, 1fr); }
+.onglets button { padding: 10px 0 8px; color: var(--pale); font-size: 10.5px; white-space: nowrap; font-weight: 500; display: grid; justify-items: center; gap: 3px; position: relative; }
 .onglets svg { width: 23px; height: 23px; }
 .onglets button.actif { color: var(--or); }
 .onglets .pastille { position: absolute; top: 6px; left: calc(50% + 8px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--or); color: #1a1408; font-size: 10px; font-weight: 700; line-height: 16px; }
@@ -230,3 +230,30 @@ h1, h2, h3, p { margin: 0; }
   .ac-page, .ac-carte, .ac-bulle, .ac-point { animation: none; opacity: 1; }
   .ac-trace { animation: none; stroke-dashoffset: 0; }
 }
+
+/* Aujourd'hui */
+.pastille.rouge { background: var(--moins); color: #1a0a06; }
+.spark { display: block; width: 100%; height: 56px; margin-top: 14px; }
+.spark-mois { display: flex; justify-content: space-between; color: var(--pale); font-size: 11px; margin-top: 4px; }
+.genres { display: flex; gap: 8px; margin-top: 16px; }
+.genres div { flex: 1; background: var(--carte2); border: 1px solid var(--trait); border-radius: 14px; padding: 10px 12px; min-width: 0; }
+.genres span { display: block; color: var(--doux); font-size: 12px; }
+.genres b { font-weight: 600; font-variant-numeric: tabular-nums; font-size: 15.5px; white-space: nowrap; }
+.reste-carte .phrase { color: var(--doux); font-size: 14.5px; }
+.reste-carte .moyen { font-family: var(--serif); font-size: 44px; line-height: 1.05; letter-spacing: -.02em; margin: 2px 0 4px; font-variant-numeric: tabular-nums; }
+.reste-carte .moyen.moins { color: var(--moins); }
+.reste-carte > .doux { font-size: 14.5px; }
+.progres { height: 4px; border-radius: 2px; background: var(--carte2); margin: 16px 0; overflow: hidden; }
+.progres i { display: block; height: 100%; background: linear-gradient(90deg, var(--or-fonce), var(--or)); border-radius: 2px; }
+.trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.trio span { display: block; color: var(--doux); font-size: 12px; }
+.trio b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.avenir { color: var(--doux); font-size: 13px; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--trait); }
+.cats { display: grid; gap: 14px; }
+.cat-haut { display: flex; justify-content: space-between; gap: 10px; font-size: 14.5px; margin-bottom: 6px; }
+.cat-haut small { color: var(--pale); font-size: 12px; }
+.cat .rail { position: relative; height: 6px; border-radius: 3px; background: var(--carte2); }
+.cat .rail i { display: block; height: 100%; border-radius: 3px; background: var(--or); }
+.cat .rail i.haut { background: var(--alerte); }
+.cat .rail b { position: absolute; top: -3px; width: 2px; height: 12px; margin-left: -1px; background: var(--texte); opacity: .55; border-radius: 1px; }
+.groupe { font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--pale); padding: 12px 0 0; }

@@ -10,7 +10,7 @@
 
   /* ---------- état ---------- */
   const S = {
-    user: null, exemple: false, vue: 'prevision', horizon: 36,
+    user: null, exemple: false, vue: 'aujourdhui', horizon: 36,
     d: null, sim: null, analyse: null,
     porte: { mode: 'entree', email: '', mdp: '', erreur: '', attente: false },
     depart: { mode: 'choix', erreur: '' },
@@ -44,6 +44,7 @@
   /* ---------- icônes ---------- */
   const trait = (d, plus = '') => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" ${plus}>${d}</svg>`;
   const I = {
+    aujourdhui: trait('<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18"/><path d="M16 14.5h2"/><path d="M7 6V4.5h10V6"/>'),
     prevision: trait('<path d="M3 17l5-5 4 3 8-9"/><path d="M15 6h5v5"/>'),
     projets: trait('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6" fill="currentColor"/>'),
     budget: trait('<path d="M4 7h16M4 12h16M4 17h10"/>'),
@@ -70,26 +71,56 @@
     return {
       profil: { prenom: '', coussin: 2000, courant_manuel: 780, ignores: [], pret: true },
       comptes: [
-        { id: id(), nom: 'Compte courant', type: 'courant', solde: 2350, source: 'manuel', inclus: true },
-        { id: id(), nom: 'Livret A', type: 'epargne', solde: 6400, source: 'manuel', inclus: true },
+        { id: 'ex-cc', nom: 'Compte courant', type: 'courant', solde: 1480, source: 'banque', banque: 'Exemple', inclus: true },
+        { id: 'ex-la', nom: 'Livret A', type: 'epargne', solde: 6400, source: 'banque', banque: 'Exemple', inclus: true },
+        { id: 'ex-av', nom: 'Assurance vie', type: 'placement', solde: 3200, source: 'manuel', inclus: false },
       ],
       flux: [
         { id: id(), nom: 'Salaire', sens: 'revenu', montant: 2150, frequence: 'mois', evolution: 1.5, actif: true },
         { id: id(), nom: 'Loyer', sens: 'depense', montant: 640, frequence: 'mois', evolution: 0, actif: true },
         { id: id(), nom: 'Énergie et internet', sens: 'depense', montant: 118, frequence: 'mois', evolution: 0, actif: true },
         { id: id(), nom: 'Assurances', sens: 'depense', montant: 96, frequence: 'mois', evolution: 0, actif: true },
-        { id: id(), nom: 'Abonnements', sens: 'depense', montant: 54, frequence: 'mois', evolution: 0, actif: true },
+        { id: id(), nom: 'Netflix', sens: 'depense', montant: 13.49, frequence: 'mois', evolution: 0, actif: true },
+        { id: id(), nom: 'Spotify', sens: 'depense', montant: 10.99, frequence: 'mois', evolution: 0, actif: true },
         { id: id(), nom: 'Impôts locaux', sens: 'depense', montant: 420, frequence: 'an', mois: 10, evolution: 0, actif: true },
       ],
       projets: [
         { id: id(), type: 'achat', nom: 'Voiture d’occasion', actif: true, ordre: 0, params: { montant: 9000, mode: 'tot', financement: 'comptant' } },
         { id: id(), type: 'investissement', nom: 'Studio locatif', actif: true, ordre: 1, params: { prix: 78000, frais: 7500, mode: 'tot', financement: 'credit', apport: 8000, taux: 3.6, dureeAns: 20, revenu: 510, charges: 120, valorisation: 1 } },
       ],
-      operations: [], sessions: [],
+      operations: operationsExemple(), sessions: [],
     };
   }
+  function operationsExemple() { // 5 mois de banque inventés, toujours les mêmes
+    let graine = 7; const alea = () => ((graine = (graine * 16807) % 2147483647) / 2147483647);
+    const auj = new Date(), L = [];
+    const ajoute = (x, j, montant, libelle, compte_id = 'ex-cc') => {
+      const t = new Date(x.getFullYear(), x.getMonth(), j);
+      if (t <= auj) L.push({ date: `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(j).padStart(2, '0')}`, montant: Math.round(montant * 100) / 100, libelle, compte_id });
+    };
+    for (let k = 5; k >= 0; k--) {
+      const x = new Date(auj.getFullYear(), auj.getMonth() - k, 1), recent = k === 0 || (k === 1 && auj.getDate() < 28);
+      ajoute(x, 28, 2150, 'VIR SEPA SALAIRE TRANSPORTS MARTIN');
+      ajoute(x, 5, -640, 'PRLV SEPA LOYER AGENCE DU CENTRE');
+      ajoute(x, 10, -118, 'PRLV SEPA EDF CLIENTS PARTICULIERS');
+      ajoute(x, 12, -96, 'PRLV SEPA MAIF ASSURANCE');
+      ajoute(x, 15, -13.49, 'CB NETFLIX.COM'); ajoute(x, 17, -10.99, 'CB SPOTIFY');
+      for (const j of [2, 6, 9, 13, 16, 20, 23, 27]) ajoute(x, j, -(28 + alea() * 55) * (recent ? 1.35 : 1), alea() > 0.5 ? 'CB CARREFOUR MARKET' : 'CB E.LECLERC');
+      for (const j of [8, 21]) ajoute(x, j, -(48 + alea() * 18), 'CB TOTAL ACCESS');
+      for (const j of [11, 25]) ajoute(x, j, -(14 + alea() * 30), alea() > 0.5 ? 'CB UBER EATS' : 'CB LA BRASSERIE');
+      ajoute(x, 18, -(20 + alea() * 60), 'CB AMAZON PAYMENTS');
+      ajoute(x, 29, -200, 'VIR VERS LIVRET A'); ajoute(x, 29, 200, 'VIR DE COMPTE COURANT', 'ex-la');
+    }
+    return L.sort((a, b) => (a.date < b.date ? 1 : -1));
+  }
   async function charger() {
-    if (S.exemple) { S.d = S.d || exemple(); return calculer(); }
+    if (S.exemple) {
+      if (!S.d) { // l'exemple ne propose pas d'ajouter ce qu'il suit déjà
+        S.d = exemple();
+        S.d.profil.ignores = M.analyser(S.d.operations, []).suggestions.map((x) => x.cle);
+      }
+      return calculer();
+    }
     const depuis = new Date(Date.now() - 215 * 864e5).toISOString().slice(0, 10);
     const [p, c, f, pr, se] = await Promise.all([
       sb.from('profils').select('*').maybeSingle(),
@@ -102,7 +133,7 @@
     if (err) throw new Error(err.error.message);
     const operations = [];
     for (let page = 0; page < 5; page++) { // 1000 lignes par appel
-      const r = await sb.from('operations').select('date,montant,libelle').gte('date', depuis).order('date', { ascending: false }).range(page * 1000, page * 1000 + 999);
+      const r = await sb.from('operations').select('date,montant,libelle,compte_id').gte('date', depuis).order('date', { ascending: false }).range(page * 1000, page * 1000 + 999);
       if (r.error || !r.data.length) break;
       operations.push(...r.data);
       if (r.data.length < 1000) break;
@@ -160,7 +191,13 @@
       flux: d.flux, projets: projets || d.projets,
     };
   }
-  function calculer() { S.sim = M.simuler(etat()); }
+  function calculer() {
+    S.sim = M.simuler(etat());
+    const d = S.d;
+    S.suivi = M.suiviMois({ comptes: d.comptes, operations: d.operations, flux: d.flux });
+    S.cv = M.comptesVue(d.comptes, d.operations);
+    S.alertes = M.alertes(S.suivi);
+  }
   const suggestions = () => S.analyse.suggestions.filter((s) => !(S.d.profil.ignores || []).includes(s.cle));
 
   /* ---------- ce que Lumo dit d'un projet ---------- */
@@ -368,6 +405,85 @@
     </div>`;
   }
 
+  /* ---------- aujourd'hui : comptes, mois en cours, alertes ---------- */
+  const leJour = (s) => { const d = new Date(`${s}T12:00`); return `${d.getDate() === 1 ? '1er' : d.getDate()} ${MOIS[d.getMonth()]}`; };
+  const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+  const GENRES = [['courant', 'Disponible'], ['epargne', 'Épargne'], ['placement', 'Placements']];
+  function texteAlerte(a) {
+    if (a.type === 'decouvert') return `Ton compte courant est <b>à découvert de ${eur(a.montant)}</b>.`;
+    if (a.type === 'risque' && a.ton === 'rouge') return `Après les prélèvements qui arrivent, il manquerait <b>${eur(a.montant)}</b> sur ton compte courant avant ta paie du ${leJour(a.quand)}.`;
+    if (a.type === 'risque') return `À ton rythme habituel, ton compte courant serait à zéro vers le <b>${leJour(a.quand)}</b>, avant ta paie. Il manquerait environ <b>${eur(a.montant)}</b>.`;
+    if (a.type === 'paie') return `Ta paie d’environ ${eur(a.montant)} était attendue vers le <b>${leJour(a.quand)}</b> et n’est pas encore arrivée.`;
+    if (a.type === 'inhabituel') return `<b>${esc(M.NOM_CAT[a.categorie])}</b> : ${eur(a.actuel)} depuis ta paie, soit <b>${eur(a.montant)} de plus</b> que d’habitude à ce stade du mois (${eur(a.habituel)}).`;
+    return esc(a.titre);
+  }
+  function sparkline(H) {
+    if (!H || H.length < 2) return '';
+    const W = 300, HT = 56, v = H.map((x) => x.total), min = Math.min(...v), max = Math.max(...v), et = max - min || 1;
+    const pts = v.map((y, i) => [(i / (v.length - 1)) * W, HT - 6 - ((y - min) / et) * (HT - 12)]);
+    const ligne = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+    return `<svg class="spark" viewBox="0 0 ${W} ${HT}" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="spk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="rgba(217,181,108,.3)"/><stop offset="1" stop-color="rgba(217,181,108,0)"/></linearGradient></defs><path d="${ligne} L${W} ${HT} L0 ${HT}Z" fill="url(#spk)"/><path d="${ligne}" fill="none" stroke="#D9B56C" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+      <div class="spark-mois">${H.map((x) => `<span>${MOIS_COURT[+x.mois.slice(5, 7) - 1]}</span>`).join('')}</div>`;
+  }
+  function vueAujourdhui() {
+    const d = S.d, s = S.suivi, cv = S.cv, A = S.alertes, auj = new Date();
+    const dateDuJour = `${['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][auj.getDay()]} ${auj.getDate()} ${MOIS[auj.getMonth()]}`;
+    const alertes = A.map((a) => `<div class="avis ${a.ton}">${I.alerte}<p>${texteAlerte(a)}</p></div>`).join('');
+    const genres = GENRES.filter(([g]) => cv.parGenre[g] || g === 'courant');
+    const groupes = GENRES.map(([g, t]) => [g, t, cv.comptes.filter((c) => c.genre === g)]).filter(([, , L]) => L.length);
+
+    let mois;
+    if (s.avecBanque) {
+      const maxCat = Math.max(1, ...s.categories.map((c) => Math.max(c.montant, c.habituel || 0)));
+      const cats = s.categories.filter((c) => c.montant > 0).slice(0, 7).map((c) => `<div class="cat">
+          <div class="cat-haut"><span>${esc(c.nom)}</span><span>${eur(c.montant)}${c.habituel != null ? `<small> · d’habitude ${eur(c.habituel)}</small>` : ''}</span></div>
+          <div class="rail"><i class="${c.habituel != null && c.montant > c.habituel * 1.3 && c.montant - c.habituel >= 40 ? 'haut' : ''}" style="width:${((c.montant / maxCat) * 100).toFixed(1)}%"></i>${c.habituel ? `<b style="left:${((c.habituel / maxCat) * 100).toFixed(1)}%"></b>` : ''}</div></div>`).join('');
+      const nomCat = (o) => (o.categorie === 'revenu' ? 'Rentrée' : M.NOM_CAT[o.categorie]);
+      mois = `
+      <div class="titre"><span>${s.paie ? `Depuis ta paie du ${leJour(s.paie.derniere)}` : `Depuis le 1er ${MOIS[auj.getMonth()]}`}</span></div>
+      <div class="carte reste-carte">
+        <div class="phrase">Tu peux encore dépenser</div>
+        <div class="moyen ${s.reste < 0 ? 'moins' : ''}">${eur(s.reste)}</div>
+        <div class="doux">${s.joursRestants ? `jusqu’au ${leJour(s.fin)}${s.paie ? ', jour de ta paie' : ''}${s.parJour != null && s.reste > 0 ? `, soit <b class="or" style="white-space:nowrap">${eur(s.parJour)} par jour</b>` : ''}` : 'Ta paie arrive aujourd’hui.'}</div>
+        <div class="progres"><i style="width:${((s.ecoules / s.duree) * 100).toFixed(1)}%"></i></div>
+        <div class="trio">
+          <div><span>Dépensé</span><b>${eur(s.depense)}</b></div>
+          <div><span>Rentré</span><b class="plus">${eur(s.entrees)}</b></div>
+          <div><span>Mis de côté</span><b class="or">${eur(s.misDeCote)}</b></div>
+        </div>
+        ${s.aVenir.length ? `<p class="avenir">Déjà retiré du calcul : <b>${eur(s.totalAVenir)}</b> de prélèvements à venir (${s.aVenir.map((x) => esc(x.nom)).join(', ')}).</p>` : ''}
+      </div>
+      ${cats ? `<div class="titre"><span>Où part ton argent</span></div><div class="carte cats">${cats}${s.historique ? '<p class="note" style="margin:6px 0 0">Le trait montre ce que tu dépenses d’habitude à ce stade du mois.</p>' : ''}</div>` : ''}
+      ${s.operations.length ? `<div class="titre"><span>Dernières opérations</span></div><div class="carte serree">${s.operations.slice(0, 8).map((o) => `<div class="ligne"><div class="corps"><div class="nom">${esc(o.libelle || 'Opération')}</div><div class="detail">${leJour(o.date)} · ${esc(nomCat(o))}</div></div><div class="somme ${o.montant > 0 ? 'plus' : ''}">${eur(o.montant, true)}</div></div>`).join('')}</div>` : ''}`;
+    } else {
+      const m = S.sim.mensuel;
+      mois = `
+      <div class="titre"><span>Ce mois-ci</span></div>
+      <div class="carte">
+        <div class="barres"><div class="barre"><span>Revenus prévus</span><span>${eur(m.revenus)}</span></div><div class="barre"><span>Dépenses fixes</span><span>${eur(m.fixes)}</span></div><div class="barre"><span>Dépenses courantes</span><span>${eur(m.courant)}</span></div></div>
+        <div class="reste"><span>Il devrait te rester</span><b class="${m.reste >= 0 ? 'plus' : 'moins'}">${eur(m.reste)}</b></div>
+      </div>
+      <div class="carte"><p class="vide" style="margin-top:0">Connecte ta banque : Lumo suit ce que tu dépenses depuis ta paie, ce qu’il te reste jusqu’à la prochaine, et te prévient avant un découvert.</p><button class="bouton" data-a="${S.exemple ? 'creer-compte' : 'reglages'}">${S.exemple ? 'Créer mon compte' : 'Connecter ma banque'}</button></div>`;
+    }
+
+    return `<div class="ecran">
+      ${bandeauExemple()}
+      ${entete(d.profil.prenom ? `Bonjour ${esc(d.profil.prenom)}` : 'Aujourd’hui', dateDuJour, `<button class="rond" data-a="reglages" aria-label="Réglages">${I.reglages}</button>`)}
+      ${alertes}
+      <div class="carte hero">
+        <div class="phrase">Sur tous tes comptes</div>
+        <div class="gros">${eur(cv.total)}</div>
+        ${cv.variation != null ? `<div class="ecart ${cv.variation >= 0 ? 'plus' : 'moins'}">${eur(cv.variation, true)} en 6 mois</div>` : ''}
+        ${sparkline(cv.histoire)}
+        <div class="genres">${genres.map(([g, t]) => `<div><span>${t}</span><b>${eur(cv.parGenre[g])}</b></div>`).join('')}</div>
+      </div>
+      ${mois}
+      <div class="titre"><span>Tes comptes</span><button data-a="nouveau-compte-direct">Ajouter</button></div>
+      <div class="carte serree">${groupes.map(([g, t, L]) => `<div class="groupe">${t}</div>${L.map((c) => `<button class="ligne" data-a="compte" data-id="${c.id}"><div class="corps"><div class="nom">${esc(c.nom)}</div><div class="detail">${c.source === 'banque' ? esc(c.banque || 'Banque') : 'Saisi à la main'}${c.inclus ? '' : ' · hors prévision'}</div></div><div class="somme">${eur(c.solde)}</div></button>`).join('')}`).join('') || '<p class="vide">Aucun compte.</p>'}</div>
+      <p class="note">Soldes de ta banque mis à jour 4 fois par jour. Les virements entre tes comptes ne comptent ni comme dépense ni comme rentrée.</p>
+    </div>`;
+  }
+
   function vueProjets() {
     const sim = S.sim, L = S.d.projets;
     return `<div class="ecran">
@@ -416,6 +532,9 @@
     const sim = S.sim, d = S.d, m = sim.mensuel, L = [];
     L.push(`Date : ${moisLong(sim.mois(0))}. Prénom : ${d.profil.prenom || 'non renseigné'}.`);
     L.push(`Argent disponible aujourd'hui : ${eur(sim.solde)} (${d.comptes.filter((c) => c.inclus).map((c) => `${c.nom} ${eur(c.solde)}`).join(', ') || 'aucun compte'}). Coussin de sécurité voulu : ${eur(sim.coussin)}.`);
+    if (S.suivi && S.suivi.avecBanque) { const t = S.suivi; L.push(`Mois en cours (depuis ${t.paie ? `la paie du ${t.debut}` : t.debut}, jusqu'au ${t.fin}) : dépensé ${eur(t.depense)}, rentré ${eur(t.entrees)}, mis de côté ${eur(t.misDeCote)}, encore dépensable ${eur(t.reste)}${t.parJour != null ? ` (${eur(t.parJour)} par jour)` : ''}. Par catégorie : ${t.categories.filter((c) => c.montant > 0).map((c) => `${c.nom} ${eur(c.montant)}${c.habituel != null ? ` (habituel ${eur(c.habituel)})` : ''}`).join(', ')}.`); }
+    if (S.cv) L.push(`Tous les comptes : ${eur(S.cv.total)} (disponible ${eur(S.cv.parGenre.courant)}, épargne ${eur(S.cv.parGenre.epargne)}, placements ${eur(S.cv.parGenre.placement)}).`);
+    if (S.alertes && S.alertes.length) L.push('Alertes du jour : ' + S.alertes.map((a) => a.titre).join(' ; ') + '.');
     L.push(`Chaque mois : revenus ${eur(m.revenus)}, dépenses fixes ${eur(m.fixes)}, dépenses courantes ${eur(m.courant)}, reste ${eur(m.reste)}.`);
     L.push('Revenus et dépenses réguliers : ' + (d.flux.map((f) => `${f.nom} (${f.sens === 'revenu' ? '+' : '−'}${eur(f.montant)} ${FREQ[f.frequence]}${f.fin ? `, jusqu'en ${moisLong(f.fin)}` : ''})`).join(' ; ') || 'aucun'));
     L.push(`Prévision avec les projets : ${[12, 36, 60, 120].map((k) => `${duree(k)} → ${eur(sim.avec[k])}`).join(', ')}.`);
@@ -643,7 +762,7 @@
     return coque(F.nouveau ? 'Nouveau compte' : esc(b.nom), `
       ${champ({ f: 'nom', t: 'Nom', type: 'texte', p: 'Compte courant, Livret A…' }, b)}
       ${banque ? `<p class="doux" style="margin:0 2px 16px">Solde lu dans ta banque : <b class="or">${eur(b.solde)}</b></p>` : champ({ f: 'solde', t: 'Solde aujourd’hui', u: '€' }, b)}
-      ${choix('type', b, [['courant', 'Compte courant'], ['epargne', 'Épargne']], 'Type')}
+      ${choix('type', b, [['courant', 'Courant'], ['epargne', 'Épargne'], ['placement', 'Placement']], 'Type')}
       ${bascule('inclus', b, 'Compter dans ma prévision', 'Éteins pour un compte que tu ne veux pas mêler à tes projets.')}
       <button class="bouton" data-a="enregistrer-compte">Enregistrer</button>
       ${F.nouveau || banque ? '' : '<button class="bouton danger" data-a="supprimer-compte">Supprimer ce compte</button>'}`);
@@ -693,8 +812,8 @@
   }
 
   /* ---------- affichage général ---------- */
-  const ONGLETS = [['prevision', 'Prévision'], ['projets', 'Projets'], ['budget', 'Budget'], ['lumi', 'Lumi']];
-  const VUES = { prevision: vuePrevision, projets: vueProjets, budget: vueBudget, lumi: vueLumi };
+  const ONGLETS = [['aujourdhui', 'Aujourd’hui'], ['prevision', 'Prévision'], ['projets', 'Projets'], ['budget', 'Budget'], ['lumi', 'Lumi']];
+  const VUES = { aujourdhui: vueAujourdhui, prevision: vuePrevision, projets: vueProjets, budget: vueBudget, lumi: vueLumi };
   function afficher() {
     finirIntro();
     const app = $('#app');
@@ -702,7 +821,7 @@
     if (!S.d) return;
     if (!S.exemple && !S.d.profil.pret) { app.innerHTML = vueDepart(); return; }
     const n = suggestions().length;
-    app.innerHTML = VUES[S.vue]() + `<nav class="onglets"><div>${ONGLETS.map(([v, t]) => `<button data-a="onglet" data-v="${v}" class="${S.vue === v ? 'actif' : ''}" ${S.vue === v ? 'aria-current="page"' : ''}>${I[v]}${t}${v === 'budget' && n ? `<span class="pastille">${n}</span>` : ''}</button>`).join('')}</div></nav>`;
+    app.innerHTML = VUES[S.vue]() + `<nav class="onglets"><div>${ONGLETS.map(([v, t]) => `<button data-a="onglet" data-v="${v}" class="${S.vue === v ? 'actif' : ''}" ${S.vue === v ? 'aria-current="page"' : ''}>${I[v]}${t}${v === 'budget' && n ? `<span class="pastille">${n}</span>` : ''}${v === 'aujourdhui' && S.alertes && S.alertes.length && S.vue !== v ? `<span class="pastille rouge">${S.alertes.length}</span>` : ''}</button>`).join('')}</div></nav>`;
     if (S.vue === 'prevision') lecture(null);
   }
   let minuteur;
@@ -745,7 +864,7 @@
     'accueil-aller': (el) => { S.accueil = +el.dataset.k; afficher(); },
     'accueil-fin': () => { marquerAccueil(); afficher(); window.scrollTo(0, 0); },
     exemple: () => { S.exemple = true; S.d = null; charger(); afficher(); window.scrollTo(0, 0); },
-    'creer-compte': () => { S.exemple = false; S.d = null; S.feuille = null; afficherFeuille(); S.vue = 'prevision'; S.fil = []; S.porte.mode = 'creation'; afficher(); },
+    'creer-compte': () => { S.exemple = false; S.d = null; S.feuille = null; afficherFeuille(); S.vue = 'aujourdhui'; S.fil = []; S.porte.mode = 'creation'; afficher(); },
     oubli: async () => {
       const email = ($('[name=email]') || {}).value;
       if (!email) { S.porte.erreur = 'Écris d’abord ton e-mail ci-dessus.'; return afficher(); }
@@ -805,8 +924,9 @@
 
     /* réglages, comptes, banque */
     'enregistrer-reglages': async () => { const b = S.feuille.brouillon; await ecrireProfil({ prenom: (b.prenom || '').trim(), coussin: M.n(b.coussin) }); dire('Réglages enregistrés.'); afficher(); },
+    'nouveau-compte-direct': () => ouvrir({ nom: 'compte', nouveau: true, brouillon: { id: id(), nom: '', type: 'courant', solde: '', source: 'manuel', inclus: true } }),
     'nouveau-compte': () => ouvrir({ nom: 'compte', nouveau: true, retour: 'reglages', brouillon: { id: id(), nom: '', type: 'courant', solde: '', source: 'manuel', inclus: true } }),
-    compte: (el) => ouvrir({ nom: 'compte', retour: 'reglages', brouillon: { ...S.d.comptes.find((x) => x.id === el.dataset.id) } }),
+    compte: (el) => ouvrir({ nom: 'compte', retour: S.feuille ? 'reglages' : null, brouillon: { ...S.d.comptes.find((x) => x.id === el.dataset.id) } }),
     'enregistrer-compte': async () => {
       const F = S.feuille, b = F.brouillon; b.nom = (b.nom || '').trim() || 'Compte';
       const { id: i, nom, type, solde, source, inclus } = b;
@@ -882,7 +1002,7 @@
     if (u && S.user && u.id === S.user.id) return;
     S.user = u;
     if (!u) { S.d = S.exemple ? S.d : null; S.fil = []; S.feuille = null; afficherFeuille(); S.depart = { mode: 'choix', erreur: '' }; afficher(); return; }
-    S.exemple = false; S.d = null; S.vue = 'prevision';
+    S.exemple = false; S.d = null; S.vue = 'aujourdhui';
     try {
       await (charge = charger());
       const retour = new URLSearchParams(location.search).get('banque');
