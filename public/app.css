@@ -174,3 +174,22 @@ h1, h2, h3, p { margin: 0; }
 .mois-ligne.tete { color: var(--pale); font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; position: sticky; top: -12px; background: #0E0D10; z-index: 1; }
 .choix button:disabled { opacity: .35; }
 .legende { align-items: center; }
+
+/* Ouverture de l'appli : le L se trace jusqu'au point, le point s'allume, puis l'appli apparaît */
+#intro { position: fixed; inset: 0; z-index: 100; display: grid; place-content: center; justify-items: center; gap: 18px; background: var(--fond); animation: intro-sortie .45s ease 8s forwards; }
+#intro.fin { animation: intro-sortie .45s ease forwards; }
+.intro-marque { position: relative; width: 200px; }
+.intro-marque img { display: block; width: 100%; height: auto; clip-path: inset(0 100% 0 0); animation: intro-trace 1s cubic-bezier(.65, 0, .35, 1) .15s forwards; }
+.intro-lueur { position: absolute; left: 77.5%; top: 56%; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 226, 140, .55) 0, rgba(246, 210, 122, .18) 35%, transparent 68%); opacity: 0; transform: scale(.2); animation: intro-allume .7s ease-out 1s forwards, intro-respire 2.2s ease-in-out 1.7s infinite; pointer-events: none; }
+.intro-nom { margin: 0; font-family: var(--serif); font-size: 30px; letter-spacing: .02em; color: var(--or-clair); opacity: 0; transform: translateY(8px); animation: intro-nom .6s ease-out 1.1s forwards; }
+@keyframes intro-trace { to { clip-path: inset(0 0 0 0); } }
+@keyframes intro-allume { 60% { opacity: 1; transform: scale(1.15); } to { opacity: .85; transform: scale(1); } }
+@keyframes intro-respire { 50% { opacity: .55; transform: scale(.92); } }
+@keyframes intro-nom { to { opacity: 1; transform: none; } }
+@keyframes intro-sortie { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) {
+  .intro-marque img { clip-path: none; animation: none; }
+  .intro-lueur { animation: none; opacity: .8; transform: none; }
+  .intro-nom { animation: none; opacity: 1; transform: none; }
+  #intro.fin { animation-duration: .2s; }
+}

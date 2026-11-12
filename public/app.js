@@ -663,6 +663,7 @@
   const ONGLETS = [['prevision', 'Prévision'], ['projets', 'Projets'], ['budget', 'Budget'], ['lumi', 'Lumi']];
   const VUES = { prevision: vuePrevision, projets: vueProjets, budget: vueBudget, lumi: vueLumi };
   function afficher() {
+    finirIntro();
     const app = $('#app');
     if (!S.user && !S.exemple) { app.innerHTML = vuePorte(); return; }
     if (!S.d) return;
@@ -821,6 +822,14 @@
   for (const ev of ['pointerdown', 'pointermove']) document.addEventListener(ev, (e) => { if (e.target.closest && e.target.closest('#courbe')) suivreCourbe(e); });
 
   /* ---------- démarrage ---------- */
+  var DEBUT = performance.now();
+  var introFinie = false;
+  function finirIntro() { // laisse l'animation d'ouverture aller au bout, puis dévoile l'appli
+    if (introFinie) return; introFinie = true;
+    const el = document.getElementById('intro'); if (!el) return;
+    const calme = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    setTimeout(() => { el.classList.add('fin'); setTimeout(() => el.remove(), 500); }, Math.max(0, (calme ? 300 : 1900) - (performance.now() - DEBUT)));
+  }
   let charge = null;
   async function entrer(session) {
     const u = session ? session.user : null;
@@ -840,6 +849,7 @@
       if (S.d.sessions.some((s) => s.status === 'AUTHORIZED' && (!s.last_sync || Date.now() - new Date(s.last_sync).getTime() > 6 * 3600e3))) synchroniser(true).then(afficher);
     } catch (e) {
       console.error(e);
+      finirIntro();
       $('#app').innerHTML = `<div class="porte"><h1>Lumo ne répond pas.</h1><p class="accroche">Vérifie ta connexion, puis réessaie.</p><button class="bouton" onclick="location.reload()">Réessayer</button></div>`;
     }
   }
