@@ -3,7 +3,15 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", { auth: { persistSession: false } });
 const CLE = Deno.env.get("ANTHROPIC_API_KEY") ?? "";
 const MODELE = Deno.env.get("LUMO_MODEL") ?? "claude-haiku-5-5";
-const MAX_JOUR = +(Deno.env.get("LUMO_DAY_MAX") ?? 60); // questions par jour et par personne
+// questions par jour et par personne, selon la formule (le serveur décide, jamais l'appli)
+const MAX_JOUR: Record<string, number> = { gratuit: +(Deno.env.get("LUMO_DAY_MAX_GRATUIT") ?? 3), plus: +(Deno.env.get("LUMO_DAY_MAX_PLUS") ?? 200) };
+// le ton de Lumi : l'appli envoie seulement un identifiant, les consignes restent ici
+const STYLES: Record<string, string> = {
+  coach: "Ton : coach bienveillant. Encourage, valorise les progrès, propose sans juger.",
+  expert: "Ton : expert sobre. Factuel, chiffré, phrases courtes, pas d'émotion ni d'émoji.",
+  direct: "Ton : direct. Dis les choses franchement, chiffres à l'appui, sans détour ni méchanceté.",
+  ludique: "Ton : ludique. Léger, avec une pointe d'humour et des petits défis, sans perdre la précision des chiffres.",
+};
 const ORIGINE_OK = /^(https:\/\/lumo[a-z0-9-]*\.vercel\.app|http:\/\/localhost(:\d+)?|http:\/\/127\.0\.0\.1(:\d+)?)$/;
 const cors = (req: Request, r: Response) => { const o = req.headers.get("origin") ?? ""; if (ORIGINE_OK.test(o)) { r.headers.set("Access-Control-Allow-Origin", o); r.headers.set("Vary", "Origin"); } r.headers.set("Access-Control-Allow-Headers", "authorization, content-type, apikey, x-client-info"); r.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS"); return r; };
 const J = (o: unknown, status = 200) => Response.json(o, { status });
@@ -26,8 +34,10 @@ Deno.serve(async (req) => {
     if (!CLE) return cors(req, J({ code: "pas_active", message: "Lumi n’est pas encore activé." }, 503));
     const b: any = await req.json().catch(() => ({}));
     const jour = new Date().toISOString().slice(0, 10);
+    const { data: plan } = await db.rpc("plan_de", { uid });
+    const max = MAX_JOUR[plan === "plus" ? "plus" : "gratuit"];
     const { data: u } = await db.from("lumi_usage").select("n").eq("user_id", uid).eq("jour", jour).maybeSingle();
-    if (u && u.n >= MAX_JOUR) return cors(req, J({ code: "limite", message: "Limite du jour atteinte, reviens demain." }, 429));
+    if (u && u.n >= max) return cors(req, J({ code: "limite", message: "Limite du jour atteinte, reviens demain." }, 429));
     const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-16)
       .map((m: any) => ({ role: m.role === "assistant" ? "assistant" : "user", content: typeof m.content === "string" ? m.content.slice(0, 4000) : "" }))
       .filter((m: any) => m.content);
@@ -37,7 +47,7 @@ Deno.serve(async (req) => {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": CLE, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: MODELE, max_tokens: 900, system: `${CONSIGNES}\n\n<chiffres>\n${chiffres}\n</chiffres>`, messages: msgs }),
+      body: JSON.stringify({ model: MODELE, max_tokens: 900, system: `${CONSIGNES}\n${Object.hasOwn(STYLES, b.style) ? STYLES[b.style] : STYLES.coach}\n\n<chiffres>\n${chiffres}\n</chiffres>`, messages: msgs }),
     });
     const j: any = await r.json().catch(() => ({}));
     if (!r.ok) return cors(req, J({ code: "indisponible", message: "Lumi est indisponible pour le moment." }, 502));

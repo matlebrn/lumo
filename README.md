@@ -10,9 +10,14 @@ Lumo relie ta banque et t'aide à gérer ton argent : il classe chaque opératio
 - **Projets** : achat, investissement, changement de vie, crédit. Pour chacun : la date au plus tôt, ce qu'il manque, la mensualité, la rentabilité
 - **Lumi** : l'assistant, qui répond à partir de la prévision
 
-## Organisation
-- `public/moteur.js` : le calcul (pur, testé) ; `public/app.js` : les écrans ; `public/app.css` : le style. Aucune étape de construction.
-- `supabase/migrations/` : la base (`profils`, `comptes`, `operations`, `flux`, `projets`, `classements`), chaque ligne lisible par son seul propriétaire
+## Deux applis, un moteur
+- `mobile/` : **la vraie appli** iPhone et Android (Expo), en construction. Voir `mobile/README.md` (organisation, règles de sécurité).
+- `public/` : l'appli web installable d'origine, toujours en ligne sur lumo-argent.vercel.app.
+- `packages/moteur/moteur.js` : le calcul (prévision, bilan, classement), un seul exemplaire pour les deux. `scripts/copier-moteur.sh` le recopie dans `public/`.
+
+## Organisation de l'appli web
+- `public/app.js` : les écrans ; `public/app.css` : le style. Aucune étape de construction.
+- `supabase/migrations/` : la base (`profils`, `comptes`, `operations`, `flux`, `projets`, `classements`, `droits`), chaque ligne lisible par son seul propriétaire
 - `supabase/functions/bank` : connexion bancaire Enable Banking, actualisée 4 fois par jour
 - `supabase/functions/coach` : Lumi
 

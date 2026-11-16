@@ -1,7 +1,7 @@
 // Tests du moteur de prévision : node --test tests/
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const M = require('../public/moteur.js');
+const M = require('../packages/moteur/moteur.js');
 
 const JOUR = new Date(2026, 10, 11); // 11 novembre 2026
 const proche = (a, b, tol = 1) => assert.ok(Math.abs(a - b) <= tol, `${a} ≠ ${b}`);
@@ -308,4 +308,11 @@ test('liste des opérations : virements internes et hésitations repérés', () 
   assert.equal(L.find((o) => o.libelle === 'CB XYZ SAS').hesite, true);
   assert.equal(L.find((o) => o.libelle === 'CB CARREFOUR MARKET').hesite, false);
   assert.ok(L.some((o) => o.interne && o.categorie === 'interne'));
+});
+
+test('l’appli web sert la même version du moteur que l’appli mobile', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const a = fs.readFileSync(path.join(__dirname, '..', 'packages/moteur/moteur.js'), 'utf8');
+  const b = fs.readFileSync(path.join(__dirname, '..', 'public/moteur.js'), 'utf8');
+  assert.equal(a, b, 'lance scripts/copier-moteur.sh');
 });
