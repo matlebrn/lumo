@@ -249,10 +249,24 @@
     if (typeof o !== 'object' || o == null) o = { libelle: o, montant: -1 };
     if (regles) { const r = regles[cleRegle(o)]; if (r) return r; }
     if (+o.montant >= 0) return 'revenu';
-    const t = MAJ(o.libelle);
+    const t = MAJ(`${o.libelle || ''} ${o.contrepartie || ''}`);
     for (const [i, , , re] of CATEGORIES) if (re.test(t)) return i;
-    return 'autres';
+    return (o.mcc && parMcc(o.mcc)) || 'autres';
   }
+  // Code d'activité du commerçant (norme ISO 18245), donné par la banque pour les paiements par carte
+  const MCC = [
+    ['retraits', [6010, 6011]], ['courses', [5411, 5412, 5422, 5441, 5451, 5462, 5499]],
+    ['carburant', [5541, 5542, 5552, 5983]], ['sorties', [5811, 5812, 5813, 5814, 7832, 7922, 7991, 7996]],
+    ['transport', [4011, 4111, 4112, 4121, 4131, 4511, 4784, 4789, 5532, 5533, 7512, 7523, 7531, 7538, 7542]],
+    ['sante', [5122, 5912, 5975, 5976, 8011, 8021, 8031, 8041, 8042, 8043, 8049, 8050, 8062, 8071, 8099]],
+    ['vetements', [5611, 5621, 5631, 5641, 5651, 5655, 5661, 5681, 5691, 5697, 5698, 5699, 5940, 5941, 5977, 7230, 7298]],
+    ['maison', [5039, 5200, 5211, 5231, 5251, 5261, 5712, 5713, 5714, 5718, 5719, 5722]],
+    ['abonnements', [4899, 5815, 5816, 5817, 5818, 7997]], ['telecom', [4812, 4814]],
+    ['logement', [4900]], ['assurances', [6300]], ['impots', [9211, 9222, 9311, 9399]],
+    ['enligne', [5310, 5311, 5331, 5399, 5732, 5734, 5964]],
+  ];
+  const MCC_CAT = new Map(MCC.flatMap(([c, L]) => L.map((x) => [x, c])));
+  const parMcc = (mcc) => MCC_CAT.get(+mcc) || null;
   // Lumo hésite : une dépense que rien ne classe et que l'utilisateur n'a pas encore rangée
   const aClasser = (o, regles) => +o.montant < 0 && !(regles && regles[cleRegle(o)]) && categorie(o) === 'autres';
   const EPARGNE_LIBELLE = /LIVRET|EPARGNE|\bLDD\b|\bLEP\b|\bPEL\b|\bCEL\b|ASSURANCE VIE|\bPEA\b|\bPER\b/;
@@ -273,9 +287,16 @@
   }
 
   // virements entre ses propres comptes : ni une dépense, ni un revenu
+  const ibanPropre = (x) => String(x || '').replace(/\s+/g, '').toUpperCase();
   function marquerInternes(ops, comptes, regles) {
     const genreDe = new Map((comptes || []).map((c) => [c.id, genre(c)]));
+    // ses propres comptes, reconnus par leur IBAN, même dans une autre banque
+    const parIban = new Map((comptes || []).filter((c) => c.iban).map((c) => [ibanPropre(c.iban), c]));
     const L = ops.map((o) => ({ ...o, montant: +o.montant, d: jour(o.date), interne: false, versEpargne: false }));
+    for (const o of L) {
+      const c = o.contrepartie_iban && parIban.get(ibanPropre(o.contrepartie_iban));
+      if (c && c.id !== o.compte_id) { o.interne = true; o.versEpargne = o.montant < 0 && genre(c) !== 'courant'; }
+    }
     const pos = L.filter((o) => o.montant > 0);
     for (const o of L) {
       if (o.montant >= 0 || o.interne) continue;
@@ -366,19 +387,24 @@
       if (!passe) aVenir.push({ nom: f.nom, montant });
     }
     const totalAVenir = aVenir.reduce((s, x) => s + x.montant, 0);
-    const reste = soldeCourant - totalAVenir;
+    // paiements par carte pas encore débités : le solde de la banque ne les compte pas encore
+    const enCours = -L.filter((o) => o.statut === 'PDNG' && o.montant < 0 && !o.interne && surCourant(o)).reduce((s, o) => s + o.montant, 0);
+    const reste = soldeCourant - enCours - totalAVenir;
+    const autorise = courants.reduce((s, c) => s + (c.decouvert != null ? Math.abs(n(c.decouvert)) : 0), 0);
     const variableParJour = avant.length ? avant.reduce((s, p) => s + p.complet / p.jours, 0) / avant.length : null;
 
     return {
       debut: iso(debut), fin: iso(fin), joursRestants, duree: dureeP, ecoules, paie: paie ? { nom: paie.nom, montant: paie.montant, derniere: iso(paie.derniere), prochaine: iso(paie.prochaine) } : null,
       avecBanque: L.length > 0, historique: avant.length,
-      soldeCourant, depense: Math.round(depenses.reduce((s, o) => s - o.montant, 0)),
+      soldeCourant, enCours: Math.round(enCours), decouvertAutorise: autorise || null,
+      soldeDispo: courants.some((c) => c.solde_dispo != null) ? Math.round(courants.reduce((s, c) => s + (c.solde_dispo != null ? n(c.solde_dispo) : n(c.solde)), 0)) : null,
+      depense: Math.round(depenses.reduce((s, o) => s - o.montant, 0)),
       entrees: Math.round(periode.filter((o) => o.montant > 0 && !o.interne).reduce((s, o) => s + o.montant, 0)),
       misDeCote: Math.round(periode.filter((o) => o.versEpargne).reduce((s, o) => s - o.montant, 0)),
       categories, aVenir, totalAVenir: Math.round(totalAVenir), reste: Math.round(reste),
       parJour: joursRestants > 0 ? Math.round(reste / joursRestants) : null,
       variableParJour: variableParJour == null ? null : Math.round(variableParJour),
-      operations: periode.filter((o) => !o.interne).sort((a, b) => b.d - a.d).map((o) => ({ date: iso(o.d), montant: o.montant, libelle: o.libelle, categorie: categorie(o, regles), id: o.id })),
+      operations: periode.filter((o) => !o.interne).sort((a, b) => b.d - a.d).map((o) => ({ date: iso(o.d), montant: o.montant, libelle: o.libelle, contrepartie: o.contrepartie || null, enCours: o.statut === 'PDNG', categorie: categorie(o, regles), id: o.id })),
     };
   }
 
@@ -404,6 +430,7 @@
   /* Alertes du jour, de la plus grave à la moins grave. */
   function alertes(suivi, maintenant) {
     const A = [], auj = maintenant ? new Date(maintenant) : new Date();
+    if (suivi.decouvertAutorise && suivi.soldeCourant - (suivi.enCours || 0) < -0.8 * suivi.decouvertAutorise) A.push({ ton: 'rouge', type: 'plafond', titre: 'Tu approches de ton découvert autorisé', montant: suivi.decouvertAutorise, actuel: -(suivi.soldeCourant - (suivi.enCours || 0)) });
     if (suivi.soldeCourant < 0) A.push({ ton: 'rouge', type: 'decouvert', titre: 'Ton compte courant est à découvert', montant: -suivi.soldeCourant });
     else if (suivi.avecBanque && suivi.joursRestants > 0) {
       const besoin = suivi.totalAVenir + (suivi.variableParJour || 0) * suivi.joursRestants;
@@ -589,6 +616,7 @@
     if (moisSecurite != null && moisSecurite >= 3 && soldeCourant > depenses * 1.5 && depenses > 0) A('Ne laisse pas dormir ton compte courant', `${e(soldeCourant - depenses)} de plus que ce dont tu as besoin pour le mois. Sur un livret, cet argent rapporterait des intérêts.`, 0);
 
     return {
+      paie: avecBanque ? analysePaie(operations, comptes, auj) : null,
       avecBanque, assez: true, mois, revenus: arr(revenus), depenses: arr(depenses), net: arr(net), taux,
       categories, besoins: arr(besoins), envies: arr(envies), repartition, credits: arr(credits), endettement,
       epargneDispo: arr(epargneDispo), placements: arr(placements), moisSecurite, joursRouge, plusBas, frais,
@@ -598,12 +626,44 @@
     };
   }
 
+  /* La paie : d'où elle vient, quand elle tombe, combien en moyenne, les primes, la prochaine.
+     C'est le revenu qui revient le plus de mois (400 € ou plus), à montant voisin. */
+  function analysePaie(operations, comptes, maintenant) {
+    const auj = maintenant ? new Date(maintenant) : new Date(); auj.setHours(12, 0, 0, 0);
+    const L = marquerInternes(operations || [], comptes).filter((o) => o.montant >= 400 && !o.interne && o.statut !== 'PDNG' && o.d <= auj);
+    const G = new Map();
+    for (const o of L) { const k = cle(o.contrepartie || o.libelle) || cle(o.libelle) || 'REVENU'; if (!G.has(k)) G.set(k, []); G.get(k).push(o); }
+    let best = null;
+    for (const [k, ops] of G) {
+      const mois = new Set(ops.map((o) => ym(o.d)));
+      if (mois.size < 2) continue;
+      const score = mois.size * 1e7 + mediane(ops.map((o) => o.montant));
+      if (!best || score > best.score) best = { k, ops, score };
+    }
+    if (!best) return null;
+    const parMoisP = new Map();
+    for (const o of best.ops) parMoisP.set(ym(o.d), (parMoisP.get(ym(o.d)) || 0) + o.montant);
+    const mois = [...parMoisP.entries()].sort((a, b) => a[0] - b[0]).map(([i, v]) => ({ mois: ecrireYM(i), montant: Math.round(v) }));
+    const recents = mois.filter((m) => lireYM(m.mois) >= ym(auj) - 12);
+    const med = mediane(recents.map((m) => m.montant));
+    const primes = recents.filter((m) => m.montant > med * 1.15 && m.montant - med >= 100).map((m) => ({ ...m, enPlus: Math.round(m.montant - med) }));
+    const tries = best.ops.slice().sort((a, b) => a.d - b.d), derniere = tries[tries.length - 1].d;
+    const jourHabituel = Math.round(mediane(tries.slice(-6).map((o) => o.d.getDate())));
+    const t3 = recents.slice(-3), t6 = recents.slice(-6, -3);
+    return {
+      nom: joli(best.k), jourHabituel, derniere: iso(derniere), prochaine: iso(decaleMois(derniere, 1, jourHabituel)),
+      moyenne: Math.round(moy(recents.map((m) => m.montant))), habituelle: Math.round(med),
+      mois: recents, primes, nbMois: mois.length,
+      evolution: t3.length === 3 && t6.length === 3 ? Math.round(((moy(t3.map((m) => m.montant)) - moy(t6.map((m) => m.montant))) / moy(t6.map((m) => m.montant))) * 1000) / 10 : null,
+    };
+  }
+
   /* Opérations à afficher : toutes, du plus récent au plus ancien, chacune avec sa catégorie. */
   function listeOperations(operations, comptes, regles) {
     return marquerInternes(operations || [], comptes, regles).sort((a, b) => b.d - a.d)
-      .map((o) => ({ id: o.id, date: iso(o.d), montant: o.montant, libelle: o.libelle, compte_id: o.compte_id, interne: o.interne, categorie: o.interne ? 'interne' : categorie(o, regles), cle: cleRegle(o), hesite: !o.interne && aClasser(o, regles) }));
+      .map((o) => ({ id: o.id, date: iso(o.d), montant: o.montant, libelle: o.libelle, contrepartie: o.contrepartie || null, mcc: o.mcc || null, enCours: o.statut === 'PDNG', compte_id: o.compte_id, interne: o.interne, categorie: o.interne ? 'interne' : categorie(o, regles), cle: cleRegle(o), hesite: !o.interne && aClasser(o, regles) }));
   }
 
-  const api = { H, n, ym, lireYM, ecrireYM, mensualite, restantDu, fluxDuMois, parMois, effets, chiffres, simuler, analyser, cle, categorie, genre, suiviMois, comptesVue, alertes, NOM_CAT, GROUPE, CHOIX_DEPENSE, CHOIX_RENTREE, cleRegle, aClasser, bilan, listeOperations };
+  const api = { H, n, ym, lireYM, ecrireYM, mensualite, restantDu, fluxDuMois, parMois, effets, chiffres, simuler, analyser, cle, categorie, genre, suiviMois, comptesVue, alertes, NOM_CAT, GROUPE, CHOIX_DEPENSE, CHOIX_RENTREE, cleRegle, aClasser, bilan, listeOperations, analysePaie, parMcc, marquerInternes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Moteur = api;
 })(typeof self !== 'undefined' ? self : this);

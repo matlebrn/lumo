@@ -69,54 +69,110 @@ function libelle(t: any) {
 const estEpargne = (a: any) => a.cash_account_type === "SVGS" || /livret|[ée]pargne|\bLDD|\bLEP\b|\bPEL\b|\bCEL\b/i.test(`${a.name ?? ""} ${a.product ?? ""}`);
 
 // ---------- un compte : son solde, puis ses opérations ----------
-async function syncCompte(acc: any, s: any, depuis: string, ph?: Record<string, string>) {
-  let solde: number | null = null;
+const COMPTABLE = ["CLBD", "ITBD", "OPBD", "PRCD", "INFO"], DISPONIBLE = ["ITAV", "CLAV", "XPCD", "FWAV"];
+const premier = (L: any[], ordre: string[]) => L.filter((x) => ordre.includes(x.balance_type)).sort((x, y) => ordre.indexOf(x.balance_type) - ordre.indexOf(y.balance_type))[0];
+const nombre = (v: unknown) => { const x = +String(v ?? "").replace(",", "."); return isFinite(x) ? x : null; };
+
+async function syncCompte(acc: any, s: any, depuis: string, ph?: Record<string, string>, premiere = false) {
+  // soldes : le comptable (ce qui est passé) et le disponible (ce que la banque laisse dépenser)
+  let solde: number | null = null, dispo: number | null = null;
   try {
-    const b = await eb(`/accounts/${acc.uid}/balances`, { headers: ph ?? {} });
-    const pref = ["CLBD", "ITBD", "XPCD", "ITAV", "CLAV", "OPBD"];
-    const rang = (x: any) => { const i = pref.indexOf(x.balance_type); return i < 0 ? 99 : i; };
-    const m = (b.balances ?? []).slice().sort((x: any, y: any) => rang(x) - rang(y))[0];
-    if (m) solde = +m.balance_amount.amount;
+    const L = (await eb(`/accounts/${acc.uid}/balances`, { headers: ph ?? {} })).balances ?? [];
+    const c = premier(L, COMPTABLE) ?? L[0], d = premier(L, DISPONIBLE);
+    if (c) solde = nombre(c.balance_amount?.amount);
+    if (d) dispo = nombre(d.balance_amount?.amount);
   } catch (e) { await log(false, `solde ${s.bank} : ${(e as Error).message}`); }
-  let { data: c } = await db.from("comptes").select("id").eq("eb_uid", acc.uid).maybeSingle();
-  if (c) { if (solde != null) await db.from("comptes").update({ solde, maj: new Date().toISOString(), session_id: s.session_id }).eq("id", c.id); }
+  const infos: Record<string, unknown> = {
+    iban: acc.account_id?.iban ?? null, devise: acc.currency ?? null,
+    decouvert: nombre(acc.credit_limit?.amount), solde_dispo: dispo,
+  };
+  let { data: c } = await db.from("comptes").select("id,eb_uid").eq("eb_uid", acc.uid).maybeSingle();
+  // accès renouvelé : la banque donne un nouvel identifiant au même compte, on le retrouve par son IBAN
+  if (!c && infos.iban) ({ data: c } = await db.from("comptes").select("id,eb_uid").eq("user_id", s.user_id).eq("source", "banque").eq("iban", infos.iban as string).limit(1).maybeSingle());
+  if (c) await db.from("comptes").update({ ...infos, ...(solde != null ? { solde } : {}), maj: new Date().toISOString(), session_id: s.session_id }).eq("id", c.id);
   else {
-    const r = await db.from("comptes").insert({ user_id: s.user_id, nom: acc.name ?? acc.product ?? s.bank, type: estEpargne(acc) ? "epargne" : "courant", solde: solde ?? 0, source: "banque", banque: s.bank, session_id: s.session_id, eb_uid: acc.uid }).select("id").single();
+    const r = await db.from("comptes").insert({ user_id: s.user_id, nom: acc.name ?? acc.product ?? s.bank, type: estEpargne(acc) ? "epargne" : "courant", solde: solde ?? 0, source: "banque", banque: s.bank, session_id: s.session_id, eb_uid: acc.uid, ...infos }).select("id").single();
     if (r.error) throw new Error(r.error.message);
-    c = r.data;
+    c = { id: r.data.id, eb_uid: acc.uid };
   }
-  let ck: string | null = null, n = 0, tours = 0;
-  do {
-    const q = new URLSearchParams({ date_from: depuis });
-    if (ck) q.set("continuation_key", ck);
-    const r = await eb(`/accounts/${acc.uid}/transactions?${q}`, { headers: ph ?? {} });
-    const rows = [];
-    for (const [i, t] of (r.transactions ?? []).entries()) {
-      if (t.status && t.status !== "BOOK") continue;
-      const montant = +t.transaction_amount.amount * (t.credit_debit_indicator === "DBIT" ? -1 : 1);
-      const date = t.booking_date ?? t.value_date ?? t.transaction_date;
-      if (!date || !isFinite(montant)) continue;
-      const lib = libelle(t);
-      rows.push({ id: acc.uid + ":" + (t.entry_reference || t.transaction_id || (await hash(`${date}|${montant}|${lib}|${i}`))), user_id: s.user_id, compte_id: c!.id, date, montant, libelle: lib });
+  const prefixe = c!.eb_uid || acc.uid; // même préfixe qu'avant le renouvellement : pas de doublons
+  // opérations : à la première connexion, on remonte le plus loin possible (2 ans, sinon ce que la banque permet)
+  const lire = async (date_from: string) => {
+    const lignes: any[] = []; let ck: string | null = null, tours = 0;
+    do {
+      const q = new URLSearchParams({ date_from });
+      if (ck) q.set("continuation_key", ck);
+      const r = await eb(`/accounts/${acc.uid}/transactions?${q}`, { headers: ph ?? {} });
+      lignes.push(...(r.transactions ?? []));
+      ck = r.continuation_key ?? null;
+    } while (ck && ++tours < 60);
+    return lignes;
+  };
+  let T: any[] = [];
+  if (premiere) {
+    let ok = false;
+    for (const jours of [730, 540, 400, 365, 180, 90]) {
+      try { T = await lire(jour(new Date(Date.now() - jours * 864e5))); ok = true; break; } catch (e) { const m = (e as Error).message; if (/\b429\b/.test(m) || !/\b4\d\d\b/.test(m)) throw e; } // période refusée : on essaie plus court
     }
-    if (rows.length) { const { error } = await db.from("operations").upsert(rows, { onConflict: "id" }); if (error) throw new Error(error.message); n += rows.length; }
-    ck = r.continuation_key ?? null;
-  } while (ck && ++tours < 40);
-  return n;
+    if (!ok) T = await lire(depuis);
+  } else T = await lire(depuis);
+  const rows: any[] = [], enCours: any[] = [];
+  for (const [i, t] of T.entries()) {
+    const statut = !t.status || t.status === "BOOK" ? "BOOK" : t.status === "PDNG" ? "PDNG" : null;
+    if (!statut) continue; // annulées, rejetées…
+    const debit = t.credit_debit_indicator === "DBIT";
+    const montant = nombre(t.transaction_amount?.amount);
+    const date = t.booking_date ?? t.value_date ?? t.transaction_date;
+    if (!date || montant == null) continue;
+    const lib = libelle(t);
+    const ligne = {
+      user_id: s.user_id, compte_id: c!.id, date, montant: montant * (debit ? -1 : 1), libelle: lib, statut,
+      contrepartie: ((debit ? t.creditor?.name : t.debtor?.name) ?? null)?.slice(0, 140) ?? null,
+      contrepartie_iban: (debit ? t.creditor_account?.iban : t.debtor_account?.iban) ?? null,
+      mcc: t.merchant_category_code ?? null, date_valeur: t.value_date ?? null,
+      code_banque: (t.bank_transaction_code?.description ?? t.bank_transaction_code?.code ?? null)?.slice(0, 80) ?? null,
+    };
+    const ref = t.entry_reference || t.transaction_id || (await hash(`${date}|${montant}|${lib}|${i}`));
+    (statut === "PDNG" ? enCours : rows).push({ id: `${prefixe}:${statut === "PDNG" ? "p:" : ""}${ref}`, ...ligne });
+  }
+  // les opérations en cours changent ou disparaissent quand elles passent : on les remplace à chaque fois
+  await db.from("operations").delete().eq("compte_id", c!.id).eq("statut", "PDNG");
+  for (const lot of [rows, enCours]) for (let k = 0; k < lot.length; k += 500) {
+    const { error } = await db.from("operations").upsert(lot.slice(k, k + 500), { onConflict: "id" });
+    if (error) throw new Error(error.message);
+  }
+  return rows.length + enCours.length;
 }
 
 // ---------- toutes les banques (ou celles d'une personne) ----------
-async function syncTout(o: { session?: string; user?: string; ph?: Record<string, string> } = {}) {
+// Créneaux des actualisations automatiques, heure de Paris : matin, midi, fin d'après-midi, soir.
+// Le jour de la paie (et la veille), on regarde plus tôt et plus souvent pour la voir arriver.
+function bonMoment(jourPaie?: number, maintenant = new Date()) {
+  const f = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", hour: "numeric", day: "numeric", hourCycle: "h23" });
+  const parts = Object.fromEntries(f.formatToParts(maintenant).map((x) => [x.type, x.value]));
+  const h = +parts.hour, j = +parts.day;
+  const paie = jourPaie && (j === jourPaie || j === jourPaie - 1 || (jourPaie > 28 && j >= 28));
+  return (paie ? [7, 10, 14, 19] : [7, 12, 17, 21]).includes(h);
+}
+
+async function syncTout(o: { session?: string; user?: string; ph?: Record<string, string>; complet?: boolean } = {}) {
   let q = db.from("eb_sessions").select("*").neq("status", "REVOKED").not("user_id", "is", null);
   if (o.session) q = q.eq("session_id", o.session);
   if (o.user) q = q.eq("user_id", o.user);
   const { data: S } = await q;
   const out: string[] = [];
+  // jour de paie de chacun, pour actualiser plus tôt et plus souvent ces jours-là
+  const paies = new Map<string, number>();
+  if (!o.session && !o.ph && S?.length) {
+    const { data: P } = await db.from("profils").select("user_id,jour_paie").in("user_id", [...new Set(S.map((x: any) => x.user_id))]);
+    for (const p of P ?? []) if (p.jour_paie) paies.set(p.user_id, p.jour_paie);
+  }
   for (const s of S ?? []) {
     try {
       if (s.valid_until && new Date(s.valid_until) < new Date()) { await db.from("eb_sessions").update({ status: "EXPIRED" }).eq("session_id", s.session_id); out.push(`${s.bank} : accès expiré, à renouveler`); continue; }
       if (!o.session && !o.ph) { // synchro automatique, sans l'utilisateur : la banque en autorise 4 par 24 h
         const calls: number[] = (Array.isArray(s.calls) ? s.calls : []).map((t: string) => new Date(t).getTime()).filter((t: number) => Date.now() - t < 23.5 * 3600e3);
+        if (!bonMoment(paies.get(s.user_id))) continue; // pas un créneau utile : rien à faire cette heure-ci
         if (calls.length >= QUOTA) { out.push(`${s.bank} : quota du jour atteint`); continue; }
         if (s.last_sync && Date.now() - new Date(s.last_sync).getTime() < 90 * 60e3) { out.push(`${s.bank} : déjà à jour`); continue; }
         calls.push(Date.now());
@@ -126,7 +182,7 @@ async function syncTout(o: { session?: string; user?: string; ph?: Record<string
       if (info.status && info.status !== "AUTHORIZED") { await db.from("eb_sessions").update({ status: info.status }).eq("session_id", s.session_id); out.push(`${s.bank} : ${info.status}`); continue; }
       const depuis = s.last_sync ? jour(new Date(new Date(s.last_sync).getTime() - 10 * 864e5)) : jour(new Date(Date.now() - 400 * 864e5));
       let n = 0;
-      for (const a of s.accounts ?? []) n += await syncCompte(a, s, depuis, o.ph);
+      for (const a of s.accounts ?? []) n += await syncCompte(a, s, depuis, o.ph, !s.last_sync || !!o.complet);
       await db.from("eb_sessions").update({ last_sync: new Date().toISOString(), status: "AUTHORIZED", error: null }).eq("session_id", s.session_id);
       out.push(`${s.bank} : ${(s.accounts ?? []).length} compte(s), ${n} opération(s)`);
     } catch (e) {
@@ -136,6 +192,7 @@ async function syncTout(o: { session?: string; user?: string; ph?: Record<string
       out.push(`${s.bank} : erreur — ${m}`);
     }
   }
+  if (!out.length && S?.length) return "Rien à faire à cette heure-ci"; // pas un créneau utile : on ne note rien
   const msg = out.join(" · ") || "Aucune banque connectée";
   await log(!out.some((x) => /erreur/.test(x)), msg);
   return msg;
@@ -199,7 +256,7 @@ async function routeUtilisateur(req: Request, path: string): Promise<Response> {
   if (path === "/u/sync") {
     if (!miennes.length) return J({ ok: true, msg: "Aucune banque connectée" });
     if (miennes.every((x: any) => x.last_sync && Date.now() - new Date(x.last_sync).getTime() < 120e3)) return J({ ok: true, msg: "Déjà à jour" });
-    const msg = await syncTout({ user: uid, ph: psu(req.headers) });
+    const msg = await syncTout({ user: uid, ph: psu(req.headers), complet: body.complet === true });
     return J({ ok: !/erreur/.test(msg), msg });
   }
   if (path === "/u/retirer") {
@@ -242,9 +299,16 @@ Deno.serve(async (req) => {
       const s = await eb("/sessions", { method: "POST", body: JSON.stringify({ code }) });
       await db.from("eb_sessions").upsert({ session_id: s.session_id, user_id: st.user_id, bank: st.bank, country: st.country, valid_until: s.access?.valid_until ?? null, status: "AUTHORIZED", accounts: s.accounts ?? [] });
       await syncTout({ session: s.session_id });
+      // renouvellement : l'ancien accès à la même banque est révoqué (les comptes, déjà rattachés au nouveau, restent)
+      const { data: vieux } = await db.from("eb_sessions").select("session_id").eq("user_id", st.user_id).eq("bank", st.bank).neq("session_id", s.session_id);
+      for (const v of vieux ?? []) {
+        try { await fetch(`${EB}/sessions/${v.session_id}`, { method: "DELETE", headers: { Authorization: `Bearer ${await jwt()}` } }); } catch { /* */ }
+        await db.from("comptes").update({ session_id: s.session_id }).eq("session_id", v.session_id);
+        await db.from("eb_sessions").delete().eq("session_id", v.session_id);
+      }
       return retour("ok");
     }
-    if (path === "/sync") { // appel automatique, 4 fois par jour, protégé par un jeton gardé en base
+    if (path === "/sync") { // appel automatique toutes les heures (4 accès par banque et par 24 h au plus), protégé par un jeton gardé en base
       const { data } = await db.from("lumo_conf").select("token").eq("id", 1).single();
       const k = req.headers.get("x-lumo") ?? "";
       if (!k || !data?.token || k !== data.token) return new Response("Accès refusé", { status: 401 });

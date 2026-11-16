@@ -315,3 +315,35 @@ test('l’appli web sert la même version du moteur que l’appli mobile', () =>
   const a = fs.readFileSync(path.join(__dirname, '..', 'packages/moteur/moteur.js'), 'utf8');
   assert.equal(fs.readFileSync(path.join(__dirname, '..', 'public/moteur.js'), 'utf8'), a, 'lance scripts/copier-moteur.sh');
 });
+
+// ——— banque complète : contrepartie, MCC, IBAN, en cours, découvert, paie ———
+test('le code commerçant classe ce que le libellé ne dit pas', () => {
+  assert.equal(M.categorie({ libelle: 'CB 4521 XJ PARIS', montant: -12, mcc: '5812' }), 'sorties');
+  assert.equal(M.categorie({ libelle: 'PRLV SEPA 88213', montant: -30, contrepartie: 'FREE MOBILE' }), 'telecom');
+});
+test('un virement vers son propre IBAN est interne, même seul', () => {
+  const comptes = [{ id: 'a', type: 'courant', nom: 'CC' }, { id: 'b', type: 'epargne', nom: 'Banque X', iban: 'FR76 1234 5678 9012' }];
+  const L = M.marquerInternes([{ id: 1, date: '2026-11-02', montant: -200, libelle: 'VIR SEPA', compte_id: 'a', contrepartie_iban: 'FR7612345678 9012' }], comptes);
+  assert.equal(L[0].interne, true); assert.equal(L[0].versEpargne, true);
+});
+test('les paiements en cours réduisent le reste, le découvert autorisé alerte', () => {
+  const comptes = [{ id: 'a', type: 'courant', nom: 'CC', solde: -400, decouvert: 450 }];
+  const ops = [];
+  for (let k = 1; k <= 4; k++) ops.push({ id: 'p' + k, date: `2026-${String(11 - k).padStart(2, '0')}-28`, montant: 1800, libelle: 'VIR SALAIRE AMBU', compte_id: 'a' });
+  ops.push({ id: 'x', date: '2026-11-10', montant: -60, libelle: 'CB CARREFOUR', compte_id: 'a', statut: 'PDNG' });
+  const s = M.suiviMois({ comptes, operations: ops, flux: [] }, ...[]);
+  assert.equal(s.enCours, 60);
+  const A = M.alertes(s, new Date(2026, 10, 12));
+  assert.ok(A.some((a) => a.type === 'plafond'));
+});
+test('analyse de la paie : jour habituel, habituelle, prime, prochaine', () => {
+  const ops = [];
+  const mois = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'];
+  mois.forEach((m, i) => ops.push({ id: m, date: `${m}-0${i % 2 ? 2 : 1}`, montant: i === 5 ? 2400 : 1800, libelle: 'VIR AMBULANCES DUPUIS SALAIRE', compte_id: 'a' }));
+  ops.push({ id: 'r', date: '2026-10-15', montant: 500, libelle: 'VIR REMBOURSEMENT', compte_id: 'a' });
+  const P = M.analysePaie(ops, [{ id: 'a', type: 'courant' }], new Date(2026, 10, 16));
+  assert.ok(P && P.nbMois === 6);
+  assert.equal(P.habituelle, 1800);
+  assert.equal(P.primes.length, 1); assert.equal(P.primes[0].enPlus, 600);
+  assert.equal(P.prochaine.slice(0, 7), '2026-11');
+});

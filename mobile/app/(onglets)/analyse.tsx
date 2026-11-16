@@ -1,5 +1,5 @@
 // Analyse : le bilan (note, mois, ce qui va, plan) et toutes les opérations classées.
-import type { Point } from '@moteur';
+import type { Paie, Point } from '@moteur';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -29,6 +29,35 @@ function Points({ L }: { L: Point[] }) {
   );
 }
 
+function TaPaie({ p }: { p: Paie }) {
+  const L = p.mois.slice(-12), max = Math.max(1, ...L.map((m) => m.montant));
+  const evo = p.evolution == null || Math.abs(p.evolution) < 1 ? '' : ` · ${p.evolution > 0 ? 'en hausse' : 'en baisse'} de ${Math.abs(p.evolution).toLocaleString('fr-FR')} % sur 3 mois`;
+  return (
+    <>
+      <Titre action={<BoutonLumi question="Analyse ma paie : régularité, primes, évolution." />}>Ta paie</Titre>
+      <Carte>
+        <View style={{ flexDirection: 'row' }}>
+          <View style={{ flex: 1 }}><Doux style={{ fontSize: 12 }}>D’habitude</Doux><T style={{ fontFamily: F.sansGras, color: C.plus }}>{eur(p.habituelle)}</T></View>
+          <View style={{ flex: 1 }}><Doux style={{ fontSize: 12 }}>En moyenne</Doux><T style={{ fontFamily: F.sansGras }}>{eur(p.moyenne)}</T></View>
+          <View style={{ flex: 1 }}><Doux style={{ fontSize: 12 }}>Tombe vers le</Doux><T style={{ fontFamily: F.sansGras }}>{String(p.jourHabituel)}</T></View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 76, marginVertical: 14 }} accessibilityLabel={`Paie des ${L.length} derniers mois`}>
+          {L.map((m) => {
+            const prime = p.primes.some((x) => x.mois === m.mois);
+            return (
+              <View key={m.mois} style={{ flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: '100%', maxWidth: 18, height: `${Math.max(4, (m.montant / max) * 85)}%`, borderTopLeftRadius: 4, borderTopRightRadius: 4, backgroundColor: prime ? C.or : C.plus, opacity: prime ? 1 : 0.75 }} />
+                <Text style={{ fontSize: 10, color: C.doux, fontFamily: F.sans }}>{moisLong(m.mois).slice(0, 1).toUpperCase()}</Text>
+              </View>
+            );
+          })}
+        </View>
+        <Doux>{`Prochaine attendue le ${leJour(p.prochaine)}${evo}.`}{p.primes.length ? ` ${p.primes.length === 1 ? 'Un mois' : `${p.primes.length} mois`} avec un bonus : ${p.primes.map((x) => `${moisLong(x.mois)} +${eur(x.enPlus)}`).join(', ')}.` : ''}</Doux>
+      </Carte>
+    </>
+  );
+}
+
 function Bilan() {
   const { d, c } = usePret();
   const b = c.bilan;
@@ -54,6 +83,7 @@ function Bilan() {
         </Pressable>
       )}
 
+      {b.paie && <TaPaie p={b.paie} />}
       {b.avecBanque && b.mois.length > 1 && <><Titre>{t('analyse.rentreSort')}</Titre><Carte><BarresMois mois={b.mois} /></Carte></>}
       {(b.vaPas ?? []).length > 0 && <><Titre>{t('analyse.vaPas')}</Titre><Points L={b.vaPas!} /></>}
       {(b.va ?? []).length > 0 && <><Titre>{t('analyse.va')}</Titre><Points L={b.va!} /></>}

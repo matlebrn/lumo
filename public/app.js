@@ -131,7 +131,7 @@
       }
       return calculer();
     }
-    const depuis = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+    const depuis = new Date(Date.now() - 760 * 864e5).toISOString().slice(0, 10); // tout l'historique gardé (2 ans)
     const [p, c, f, pr, se, cl] = await Promise.all([
       sb.from('profils').select('*').maybeSingle(),
       sb.from('comptes').select('*').order('cree'),
@@ -143,8 +143,8 @@
     const err = [p, c, f, pr].find((r) => r.error);
     if (err) throw new Error(err.error.message);
     const operations = [];
-    for (let page = 0; page < 8; page++) { // 1000 lignes par appel
-      const r = await sb.from('operations').select('id,date,montant,libelle,compte_id').gte('date', depuis).order('date', { ascending: false }).range(page * 1000, page * 1000 + 999);
+    for (let page = 0; page < 20; page++) { // 1000 lignes par appel
+      const r = await sb.from('operations').select('id,date,montant,libelle,compte_id,contrepartie,contrepartie_iban,mcc,statut').gte('date', depuis).order('date', { ascending: false }).range(page * 1000, page * 1000 + 999);
       if (r.error || !r.data.length) break;
       operations.push(...r.data);
       if (r.data.length < 1000) break;
@@ -212,6 +212,12 @@
     S.alertes = M.alertes(S.suivi);
     S.bilan = M.bilan({ comptes: d.comptes, operations: d.operations, flux: d.flux, regles, mensuel: S.sim.mensuel });
     S.ops = M.listeOperations(d.operations, d.comptes, regles);
+    // Lumo retient le jour de la paie : le serveur actualise la banque plus tôt et plus souvent ce jour-là
+    const jp = S.bilan && S.bilan.paie && S.bilan.paie.jourHabituel;
+    if (jp && !S.exemple && d.profil.jour_paie !== jp) {
+      d.profil.jour_paie = jp;
+      sb.auth.getUser().then(({ data }) => data.user && sb.from('profils').upsert({ user_id: data.user.id, jour_paie: jp })).catch(() => {});
+    }
   }
   const suggestions = () => S.analyse.suggestions.filter((s) => !(S.d.profil.ignores || []).includes(s.cle));
 
@@ -424,7 +430,17 @@
   const leJour = (s) => { const d = new Date(`${s}T12:00`); return `${d.getDate() === 1 ? '1er' : d.getDate()} ${MOIS[d.getMonth()]}`; };
   const MOIS_COURT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
   const GENRES = [['courant', 'Disponible'], ['epargne', 'Épargne'], ['placement', 'Placements']];
+  // L'accès à la banque dure environ 180 jours (règle européenne) : Lumo prévient 15 jours avant
+  function renouvellements() {
+    return (S.d.sessions || []).map((x) => {
+      const reste = x.valid_until ? Math.ceil((new Date(x.valid_until) - Date.now()) / 864e5) : null;
+      const fini = x.status !== 'AUTHORIZED' || (reste != null && reste <= 0);
+      if (!fini && (reste == null || reste > 15)) return '';
+      return `<button class="avis ${fini ? 'rouge' : 'alerte'} bloc" data-a="choisir-banque" data-nom="${esc(x.bank)}">${I.alerte}<p>${fini ? `<b>L’accès à ${esc(x.bank)} a expiré.</b> Lumo ne voit plus tes nouvelles opérations.` : `<b>L’accès à ${esc(x.bank)} expire dans ${reste} jour${reste > 1 ? 's' : ''}.</b> La loi impose de le renouveler tous les 180 jours.`} <span class="lien">Renouveler</span></p></button>`;
+    }).join('');
+  }
   function texteAlerte(a) {
+    if (a.type === 'plafond') return `Tu es à <b>${eur(a.actuel)}</b> sur un découvert autorisé de ${eur(a.montant)}. Au-delà, la banque peut refuser tes paiements et facturer des frais.`;
     if (a.type === 'decouvert') return `Ton compte courant est <b>à découvert de ${eur(a.montant)}</b>.`;
     if (a.type === 'risque' && a.ton === 'rouge') return `Après les prélèvements qui arrivent, il manquerait <b>${eur(a.montant)}</b> sur ton compte courant avant ta paie du ${leJour(a.quand)}.`;
     if (a.type === 'risque') return `À ton rythme habituel, ton compte courant serait à zéro vers le <b>${leJour(a.quand)}</b>, avant ta paie. Il manquerait environ <b>${eur(a.montant)}</b>.`;
@@ -443,7 +459,7 @@
   function vueAujourdhui() {
     const d = S.d, s = S.suivi, cv = S.cv, A = S.alertes, auj = new Date();
     const dateDuJour = `${['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'][auj.getDay()]} ${auj.getDate()} ${MOIS[auj.getMonth()]}`;
-    const alertes = A.map((a) => `<div class="avis ${a.ton}">${I.alerte}<p>${texteAlerte(a)}</p></div>`).join('');
+    const alertes = renouvellements() + A.map((a) => `<div class="avis ${a.ton}">${I.alerte}<p>${texteAlerte(a)}</p></div>`).join('');
     const genres = GENRES.filter(([g]) => cv.parGenre[g] || g === 'courant');
     const groupes = GENRES.map(([g, t]) => [g, t, cv.comptes.filter((c) => c.genre === g)]).filter(([, , L]) => L.length);
 
@@ -466,6 +482,7 @@
           <div><span>Rentré</span><b class="plus">${eur(s.entrees)}</b></div>
           <div><span>Mis de côté</span><b class="or">${eur(s.misDeCote)}</b></div>
         </div>
+        ${s.enCours ? `<p class="avenir">Paiements en cours, pas encore débités par la banque : <b>${eur(s.enCours)}</b>, déjà retirés.</p>` : ''}
         ${s.aVenir.length ? `<p class="avenir">Déjà retiré du calcul : <b>${eur(s.totalAVenir)}</b> de prélèvements à venir (${s.aVenir.map((x) => esc(x.nom)).join(', ')}).</p>` : ''}
       </div>
       ${cats ? `<div class="titre"><span>Où part ton argent</span></div><div class="carte cats">${cats}${s.historique ? '<p class="note" style="margin:6px 0 0">Le trait montre ce que tu dépenses d’habitude à ce stade du mois.</p>' : ''}</div>` : ''}
@@ -496,7 +513,7 @@
       ${mois}
       <div class="titre"><span>Tes comptes</span><button data-a="nouveau-compte-direct">Ajouter</button></div>
       <div class="carte serree">${groupes.map(([g, t, L]) => `<div class="groupe">${t}</div>${L.map((c) => `<button class="ligne" data-a="compte" data-id="${c.id}"><div class="corps"><div class="nom">${esc(c.nom)}</div><div class="detail">${c.source === 'banque' ? esc(c.banque || 'Banque') : 'Saisi à la main'}${c.inclus ? '' : ' · hors prévision'}</div></div><div class="somme">${eur(c.solde)}</div></button>`).join('')}`).join('') || '<p class="vide">Aucun compte.</p>'}</div>
-      <p class="note">Soldes de ta banque mis à jour 4 fois par jour. Les virements entre tes comptes ne comptent ni comme dépense ni comme rentrée.</p>
+      <p class="note">Soldes de ta banque mis à jour à chaque ouverture et plusieurs fois par jour. Les virements entre tes comptes ne comptent ni comme dépense ni comme rentrée.</p>
     </div>`;
   }
 
@@ -572,6 +589,22 @@
       <p class="note" style="margin:12px 0 0">Repère courant : la moitié de tes revenus pour l’obligatoire (logement, factures, courses, transport), 30 % pour tes envies, 20 % de côté.</p></div>`;
   }
   const blocPoints = (L) => L.map((p) => `<div class="point ${p.ton}"><i>${p.ton === 'bon' ? '✓' : '!'}</i><div><b>${p.titre}</b><span>${p.texte}</span></div></div>`).join('');
+  function cartePaie(p) {
+    if (!p) return '';
+    const max = Math.max(1, ...p.mois.map((m) => m.montant));
+    const barres = p.mois.slice(-12).map((m) => `<div class="pb" title="${esc(m.mois)} : ${eur(m.montant)}"><i style="height:${Math.max(4, (m.montant / max) * 100).toFixed(1)}%" class="${p.primes.some((x) => x.mois === m.mois) ? 'prime' : ''}"></i><span>${MOIS[+m.mois.slice(5) - 1].slice(0, 1).toUpperCase()}</span></div>`).join('');
+    const evo = p.evolution == null || Math.abs(p.evolution) < 1 ? '' : ` · ${p.evolution > 0 ? 'en hausse' : 'en baisse'} de ${Math.abs(p.evolution).toLocaleString('fr-FR')} % sur 3 mois`;
+    return `<div class="titre"><span>Ta paie</span><span class="sous-titre">${esc(p.nom)}</span></div>
+      <div class="carte paie">
+        <div class="trio">
+          <div><span>D’habitude</span><b class="plus">${eur(p.habituelle)}</b></div>
+          <div><span>En moyenne</span><b>${eur(p.moyenne)}</b></div>
+          <div><span>Tombe vers le</span><b>${p.jourHabituel}</b></div>
+        </div>
+        <div class="paie-barres">${barres}</div>
+        <p class="doux">Prochaine attendue le <b>${leJour(p.prochaine)}</b>${evo}.${p.primes.length ? ` ${p.primes.length === 1 ? 'Un mois' : `${p.primes.length} mois`} avec un bonus (prime, heures en plus) : ${p.primes.map((x) => `${MOIS[+x.mois.slice(5) - 1]} +${eur(x.enPlus)}`).join(', ')}.` : ''}</p>
+      </div>`;
+  }
   function vueBilan() {
     const b = S.bilan;
     if (!b || !b.assez) return `<div class="carte"><p class="vide">Lumo a besoin d’au moins un mois complet d’opérations pour faire ton bilan. Reviens au début du mois prochain.</p></div>`;
@@ -586,6 +619,7 @@
       </div>
       ${groupes.length ? `<button class="avis alerte bloc" data-a="classer">${I.alerte}<p><b>Lumo hésite sur ${groupes.length} dépense${groupes.length > 1 ? 's' : ''}.</b> Dis-lui où les ranger : ton bilan sera plus juste. <span class="lien">Classer</span></p></button>` : ''}
       ${b.avecBanque && b.mois.length > 1 ? `<div class="titre"><span>Ce qui rentre, ce qui sort</span></div><div class="carte">${barresMois(b.mois)}</div>` : `<div class="carte"><div class="barres"><div class="barre"><span>Rentrées par mois</span><span class="plus">${eur(b.revenus)}</span></div><div class="barre"><span>Sorties par mois</span><span>${eur(b.depenses)}</span></div></div><p class="note" style="margin:12px 0 0">Connecte ta banque : Lumo classe chaque opération et suit tes mois un par un.</p></div>`}
+      ${cartePaie(b.paie)}
       ${b.vaPas.length ? `<div class="titre"><span>Ce qui ne va pas</span></div><div class="carte points">${blocPoints(b.vaPas)}</div>` : ''}
       ${b.va.length ? `<div class="titre"><span>Ce qui va bien</span></div><div class="carte points">${blocPoints(b.va)}</div>` : ''}
       ${b.plan.length ? `<div class="titre"><span>${b.difficulte ? 'Comment t’en sortir' : 'Pour faire encore mieux'}</span></div><div class="carte plan">
@@ -962,7 +996,7 @@
       ${d.sessions.length ? `<div class="carte serree">${d.sessions.map((s) => `<div class="ligne"><div class="corps"><div class="nom">${esc(s.bank)}</div><div class="detail">${s.status === 'AUTHORIZED' ? `Mise à jour ${ilYA(s.last_sync)}` : 'Accès expiré : reconnecte ta banque'}${s.error ? ` · ${esc(s.error)}` : ''}</div></div><button class="etiquette rouge" data-a="retirer-banque" data-id="${esc(s.session_id)}">Retirer</button></div>`).join('')}</div>
       <button class="bouton second" data-a="sync" ${F.attente ? 'disabled' : ''}>${F.attente ? 'Mise à jour…' : 'Mettre à jour maintenant'}</button><div style="height:10px"></div>` : ''}
       <button class="bouton ${d.sessions.length ? 'discret' : ''}" data-a="banques">${d.sessions.length ? 'Connecter une autre banque' : 'Connecter ma banque'}</button>
-      <p class="note">Lumo lit tes comptes, il ne peut ni payer ni virer. Mise à jour automatique 4 fois par jour.</p>`}
+      <p class="note">Lumo lit tes comptes, il ne peut ni payer ni virer. Mise à jour à chaque ouverture et plusieurs fois par jour.</p>`}
       <div class="titre"><span>Compte</span></div>
       ${S.exemple ? '<button class="bouton" data-a="creer-compte">Commencer avec mes chiffres</button>' : `${sansCompte() ? '<p class="doux" style="margin:0 4px 12px">Ton espace Lumo est rattaché à cet appareil, sans e-mail ni mot de passe. Garde l’appli sur ton écran d’accueil : si tu la supprimes, l’accès est perdu.</p>' : `<p class="doux" style="margin:0 4px 12px">${esc(S.user.email)}</p>
       <button class="bouton second" data-a="deconnexion">Me déconnecter</button>`}
@@ -1224,7 +1258,7 @@
         else dire(retour === 'annulee' ? 'Connexion à la banque annulée.' : 'La connexion à la banque a échoué. Réessaie.');
       }
       afficher();
-      if (S.d.sessions.some((s) => s.status === 'AUTHORIZED' && (!s.last_sync || Date.now() - new Date(s.last_sync).getTime() > 6 * 3600e3))) synchroniser(true).then(afficher);
+      if (S.d.sessions.some((s) => s.status === 'AUTHORIZED' && (!s.last_sync || Date.now() - new Date(s.last_sync).getTime() > 3600e3))) synchroniser(true).then(afficher); // plus d'une heure : on actualise (l'utilisateur est là, la banque n'impose pas de limite)
     } catch (e) {
       console.error(e);
       finirIntro();

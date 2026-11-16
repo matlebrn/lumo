@@ -3,6 +3,7 @@ import type { Alerte } from '@moteur';
 import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { usePret } from '@/donnees/Donnees';
+import type { Session } from '@/donnees/types';
 import { eur, leJour, MOIS, t } from '@/i18n';
 import { BoutonLumi } from '@/lumi/BoutonLumi';
 import { C, F } from '@/theme';
@@ -12,12 +13,31 @@ import { Icone } from '@/ui/Icone';
 import { NOM_CAT } from '@moteur';
 
 function texteAlerte(a: Alerte) {
+  if (a.type === 'plafond') return `Tu es à ${eur(a.actuel)} sur un découvert autorisé de ${eur(a.montant)}. Au-delà, la banque peut refuser tes paiements.`;
   if (a.type === 'decouvert') return `Ton compte courant est à découvert de ${eur(a.montant)}.`;
   if (a.type === 'risque' && a.ton === 'rouge') return `Après les prélèvements qui arrivent, il manquerait ${eur(a.montant)} avant ta paie du ${leJour(a.quand!)}.`;
   if (a.type === 'risque') return `À ton rythme, ton compte serait à zéro vers le ${leJour(a.quand!)}, avant ta paie.`;
   if (a.type === 'paie') return `Ta paie d’environ ${eur(a.montant)} était attendue vers le ${leJour(a.quand!)}.`;
   if (a.type === 'inhabituel') return `${NOM_CAT[a.categorie!]} : ${eur(a.montant)} de plus que d’habitude à ce stade du mois.`;
   return a.titre;
+}
+
+// L'accès à la banque dure environ 180 jours (règle européenne) : Lumo prévient 15 jours avant
+function Renouvellements({ sessions }: { sessions: Session[] }) {
+  return (
+    <>
+      {sessions.map((x) => {
+        const reste = x.valid_until ? Math.ceil((new Date(x.valid_until).getTime() - Date.now()) / 864e5) : null;
+        const fini = x.status !== 'AUTHORIZED' || (reste != null && reste <= 0);
+        if (!fini && (reste == null || reste > 15)) return null;
+        return (
+          <Pressable key={x.session_id} onPress={() => router.push({ pathname: '/banque', params: { nom: x.bank } })} accessibilityRole="button">
+            <Avis ton={fini ? 'rouge' : 'alerte'}>{fini ? `L’accès à ${x.bank} a expiré : Lumo ne voit plus tes nouvelles opérations. Touche pour le renouveler.` : `L’accès à ${x.bank} expire dans ${reste} jour${reste! > 1 ? 's' : ''}. Touche pour le renouveler en un instant.`}</Avis>
+          </Pressable>
+        );
+      })}
+    </>
+  );
 }
 
 export default function Aujourdhui() {
@@ -30,6 +50,7 @@ export default function Aujourdhui() {
 
   return (
     <Ecran titre={d.profil.prenom ? t('aujourdhui.bonjour', { prenom: d.profil.prenom }) : t('aujourdhui.titre')} sous={date}>
+      <Renouvellements sessions={d.sessions} />
       {alertes.map((a, i) => <Avis key={i} ton={a.ton}>{texteAlerte(a)}</Avis>)}
 
       <Carte>
@@ -54,6 +75,7 @@ export default function Aujourdhui() {
             <Doux>{t('aujourdhui.peuxDepenser')}</Doux>
             <Text style={{ fontFamily: F.serif, fontSize: 44, color: s.reste < 0 ? C.moins : C.texte }}>{eur(s.reste)}</Text>
             <Doux>{t('aujourdhui.jusquau', { jour: leJour(s.fin) })}{s.parJour != null && s.reste > 0 ? `, soit ${t('aujourdhui.parJour', { v: eur(s.parJour) })}` : ''}</Doux>
+            {s.enCours > 0 && <Doux style={{ marginTop: 6, fontSize: 13 }}>{`Dont ${eur(s.enCours)} de paiements en cours, pas encore débités par la banque.`}</Doux>}
             <View style={{ marginVertical: 16 }}><Rail part={s.ecoules / s.duree} /></View>
             <View style={{ flexDirection: 'row' }}>
               <View style={{ flex: 1 }}><Doux style={{ fontSize: 12 }}>{t('aujourdhui.depense')}</Doux><T style={{ fontFamily: F.sansGras }}>{eur(s.depense)}</T></View>

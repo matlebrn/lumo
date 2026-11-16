@@ -18,7 +18,8 @@
     const noms = new Map((d.comptes || []).map((c) => [c.id, c.nom]));
     const L = M.listeOperations(d.operations || [], d.comptes || [], regles).map((o) => ({
       date: o.date, montant: arrondi(+o.montant), libelle: String(o.libelle || '').slice(0, 90),
-      categorie: o.categorie, interne: o.interne, compte: noms.get(o.compte_id) || null, cle: sansAccent(o.libelle),
+      contrepartie: o.contrepartie ? String(o.contrepartie).slice(0, 60) : null, en_cours: !!o.enCours,
+      categorie: o.categorie, interne: o.interne, compte: noms.get(o.compte_id) || null, cle: sansAccent(`${o.libelle || ''} ${o.contrepartie || ''}`),
     }));
     const dates = L.map((o) => o.date).sort();
     return { ...d, L, couverture: dates.length ? { du: dates[0], au: dates[dates.length - 1], operations: dates.length } : null };
@@ -42,7 +43,7 @@
     });
   }
   const somme = (L) => arrondi(L.reduce((s, o) => s + o.montant, 0));
-  const court = (o) => ({ date: o.date, montant: o.montant, libelle: o.libelle, categorie: M.NOM_CAT[o.categorie] || o.categorie, compte: o.compte });
+  const court = (o) => ({ date: o.date, montant: o.montant, libelle: o.libelle, ...(o.contrepartie ? { qui: o.contrepartie } : {}), ...(o.en_cours ? { en_cours: true } : {}), categorie: M.NOM_CAT[o.categorie] || o.categorie, compte: o.compte });
 
   const OUTILS = {
     chercher_operations(P, a) {
@@ -81,7 +82,11 @@
       return { historique_disponible: P.couverture, differents: R.length, libelles: R.slice(0, 40) };
     },
     comptes(P) {
-      return { comptes: (P.comptes || []).map((c) => ({ nom: c.nom, type: M.genre(c), solde: arrondi(+c.solde), banque: c.banque || (c.source === 'banque' ? 'Banque' : 'Saisi à la main') })), historique_disponible: P.couverture };
+      return { comptes: (P.comptes || []).map((c) => ({ nom: c.nom, type: M.genre(c), solde: arrondi(+c.solde), ...(c.solde_dispo != null ? { disponible: arrondi(+c.solde_dispo) } : {}), ...(c.decouvert != null ? { decouvert_autorise: arrondi(Math.abs(+c.decouvert)) } : {}), banque: c.banque || (c.source === 'banque' ? 'Banque' : 'Saisi à la main') })), operations_en_cours: somme(P.L.filter((o) => o.en_cours)), historique_disponible: P.couverture };
+    },
+    paie(P) {
+      const a = M.analysePaie(P.operations || [], P.comptes || []);
+      return a ? { trouvee: true, ...a, historique_disponible: P.couverture } : { trouvee: false, raison: 'Pas de revenu régulier de 400 € ou plus sur au moins 2 mois', historique_disponible: P.couverture };
     },
     budget(P) {
       return {

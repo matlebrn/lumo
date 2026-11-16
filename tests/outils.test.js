@@ -58,3 +58,10 @@ test('le serveur décrit exactement les outils que le téléphone sait exécuter
   const cats = JSON.parse(src.match(/categorie: \{ type: "string", enum: (\[[^\]]+\])/)[1]);
   assert.deepEqual(cats.sort(), [...M.CHOIX_DEPENSE].sort());
 });
+
+test('outil paie : trouve la paie et le jour habituel', () => {
+  const ops = ['2026-07', '2026-08', '2026-09', '2026-10'].map((m) => ({ id: m, date: `${m}-01`, montant: 1800, libelle: 'VIR SALAIRE', compte_id: 'a' }));
+  const P = O.preparer({ comptes: [{ id: 'a', nom: 'CC', type: 'courant', solde: 100 }], operations: ops });
+  const r = O.executer(P, 'paie', {});
+  assert.equal(r.trouvee, true); assert.equal(r.jourHabituel, 1); assert.equal(r.habituelle, 1800);
+});

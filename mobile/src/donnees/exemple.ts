@@ -33,7 +33,7 @@ function operations(): Operation[] {
 export function exemple(): Donnees {
   const id = (s: string) => `ex-${s}`;
   return {
-    plan: 'gratuit', classements: {},
+    plan: 'gratuit', classements: {}, sessions: [],
     profil: { prenom: '', coussin: 2000, courant_manuel: 780, ignores: [], pret: true, situation: 'salarie', objectif: 'projet', style_lumi: 'coach' },
     comptes: [
       { id: 'ex-cc', nom: 'Compte courant', type: 'courant', solde: 1480, source: 'banque', banque: 'Exemple', inclus: true },

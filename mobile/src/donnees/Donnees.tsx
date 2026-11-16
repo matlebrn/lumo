@@ -1,13 +1,14 @@
 // Les données de la personne, chargées une fois et partagées par tous les écrans.
 // Deux sources : le serveur (son espace Lumo) ou l'exemple (en mémoire, rien n'est enregistré).
 import type { Regles } from '@moteur';
+import { AppState } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { coffre } from '@/securite/stockage';
 import type { Plan } from '@/droits';
 import { calculer, type Calcul } from './calcul';
 import { exemple } from './exemple';
-import { sb } from './supabase';
-import type { Donnees, Objectif, Profil, Situation } from './types';
+import { sb, serveur } from './supabase';
+import type { Donnees, Objectif, Profil, Session, Situation } from './types';
 import type { StyleLumi } from '@/lumi/styles';
 
 type Etat = 'demarrage' | 'accueil' | 'pret' | 'erreur';
@@ -16,7 +17,7 @@ interface Valeur {
   commencer: (choix: { situation: Situation; objectif: Objectif; style: StyleLumi }) => Promise<void>;
   voirExemple: () => Promise<void>;
   quitterExemple: () => Promise<void>;
-  recharger: () => Promise<void>;
+  recharger: (actualiser?: boolean) => Promise<void>;
   ranger: (cle: string, categorie: string | null) => Promise<void>;
   changerProfil: (patch: Partial<Profil>) => Promise<void>;
 }
@@ -29,20 +30,21 @@ const CLE_MODE = 'lumo.mode';
 const PROFIL_VIDE: Profil = { prenom: '', coussin: 0, courant_manuel: null, ignores: [], pret: false, situation: null, objectif: null, style_lumi: 'coach' };
 
 async function chargerServeur(): Promise<Donnees> {
-  const depuis = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
-  const [p, c, f, pr, cl, dr] = await Promise.all([
+  const depuis = new Date(Date.now() - 760 * 864e5).toISOString().slice(0, 10); // tout l'historique gardé (2 ans)
+  const [p, c, f, pr, cl, dr, se] = await Promise.all([
     sb.from('profils').select('*').maybeSingle(),
     sb.from('comptes').select('*').order('cree'),
     sb.from('flux').select('*').order('cree'),
     sb.from('projets').select('*').order('ordre').order('cree'),
     sb.from('classements').select('cle,categorie'),
     sb.from('droits').select('plan,valide_jusqu').maybeSingle(),
+    sb.from('eb_sessions').select('session_id,bank,status,last_sync,valid_until,error').neq('status', 'REVOKED'),
   ]);
   const err = [p, c, f, pr].find((r) => r.error);
   if (err?.error) throw new Error(err.error.message);
   const operations = [];
-  for (let page = 0; page < 8; page++) {
-    const r = await sb.from('operations').select('id,date,montant,libelle,compte_id').gte('date', depuis).order('date', { ascending: false }).range(page * 1000, page * 1000 + 999);
+  for (let page = 0; page < 20; page++) {
+    const r = await sb.from('operations').select('id,date,montant,libelle,compte_id,contrepartie,contrepartie_iban,mcc,statut').gte('date', depuis).order('date', { ascending: false }).range(page * 1000, page * 1000 + 999);
     if (r.error || !r.data.length) break;
     operations.push(...r.data);
     if (r.data.length < 1000) break;
@@ -53,29 +55,51 @@ async function chargerServeur(): Promise<Donnees> {
     profil: { ...PROFIL_VIDE, ...(p.data ?? {}) },
     comptes: c.data ?? [], flux: f.data ?? [], projets: pr.data ?? [], operations,
     classements: Object.fromEntries(((cl.data ?? []) as { cle: string; categorie: string }[]).map((x) => [x.cle, x.categorie])) as Regles,
-    plan,
+    plan, sessions: (se.data ?? []) as Session[],
   };
 }
+
+// Une actualisation quand la personne ouvre Lumo : la banque n'impose pas de limite quand elle est là
+const vieille = (d: Donnees) => d.sessions.some((x) => x.status === 'AUTHORIZED' && (!x.last_sync || Date.now() - new Date(x.last_sync).getTime() > 3600e3));
 
 export function DonneesProvider({ children }: { children: ReactNode }) {
   const [etat, setEtat] = useState<Etat>('demarrage');
   const [erreur, setErreur] = useState('');
   const [estExemple, setExemple] = useState(false);
   const [d, setD] = useState<Donnees | null>(null);
-  const c = useMemo(() => (d ? calculer(d) : null), [d]);
 
-  const recharger = useCallback(async () => {
-    try { setD(await chargerServeur()); setEtat('pret'); }
-    catch (e) { setErreur(e instanceof Error ? e.message : String(e)); setEtat('erreur'); }
+  const recharger = useCallback(async (actualiser = false) => {
+    try {
+      let x = await chargerServeur();
+      setD(x); setEtat('pret');
+      if (actualiser && vieille(x)) {
+        const r = await serveur('bank/u/sync').catch(() => null);
+        if (r?.ok) { x = await chargerServeur(); setD(x); }
+      }
+    } catch (e) { setErreur(e instanceof Error ? e.message : String(e)); setEtat('erreur'); }
   }, []);
+  const c = useMemo(() => (d ? calculer(d) : null), [d]);
+  // Lumo retient le jour de la paie : le serveur regarde la banque plus tôt et plus souvent ce jour-là
+  useEffect(() => {
+    const jp = c?.bilan.paie?.jourHabituel;
+    if (!d || estExemple || !jp || d.profil.jour_paie === jp) return;
+    d.profil.jour_paie = jp;
+    sb.auth.getUser().then(({ data }) => data.user && sb.from('profils').upsert({ user_id: data.user.id, jour_paie: jp })).catch(() => {});
+  }, [c, d, estExemple]);
 
   useEffect(() => {
     (async () => {
       if ((await coffre.getItem(CLE_MODE)) === 'exemple') { setExemple(true); setD(exemple()); setEtat('pret'); return; }
       const { data } = await sb.auth.getSession();
-      if (data.session) await recharger(); else setEtat('accueil');
+      if (data.session) await recharger(true); else setEtat('accueil');
     })();
   }, [recharger]);
+
+  // retour dans l'appli après un moment : on actualise aussi
+  useEffect(() => {
+    const ab = AppState.addEventListener('change', (e) => { if (e === 'active' && d && !estExemple && vieille(d)) recharger(true); });
+    return () => ab.remove();
+  }, [d, estExemple, recharger]);
 
   const commencer: Valeur['commencer'] = async ({ situation, objectif, style }) => {
     setErreur('');

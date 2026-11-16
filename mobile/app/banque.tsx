@@ -20,7 +20,7 @@ const GARANTIES = [
 ];
 
 export default function Banque() {
-  const { premier } = useLocalSearchParams<{ premier?: string }>();
+  const { premier, nom } = useLocalSearchParams<{ premier?: string; nom?: string }>();
   const { recharger, exemple } = useDonnees();
   const [banques, setBanques] = useState<{ name: string }[] | null>(null);
   const [erreur, setErreur] = useState('');
@@ -61,10 +61,13 @@ export default function Banque() {
     setErreur(etat === 'annulee' ? 'Connexion annulée. Tu peux réessayer.' : etat === 'expiree' ? 'Le lien a expiré. Réessaie.' : 'La connexion à ta banque a échoué. Réessaie.');
   };
 
+  // renouvellement depuis l'alerte : on rouvre directement la même banque
+  useEffect(() => { if (nom && !exemple) choisir(nom); }, [nom]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <Feuille titre={premier ? 'Ta banque' : 'Connecter une banque'}>
       <Text style={{ color: C.texte, fontFamily: F.serif, fontSize: 30, lineHeight: 34, marginBottom: 8 }}>Connecte ta banque, <Text style={{ color: C.or, fontStyle: 'italic' }}>Lumo fait le reste.</Text></Text>
-      <Doux style={{ marginBottom: 16 }}>Tes comptes, tes opérations classées, ton bilan et Lumi qui fouille pour toi : tout part de là. Mise à jour 4 fois par jour.</Doux>
+      <Doux style={{ marginBottom: 16 }}>Tes comptes, tes opérations classées, ton bilan et Lumi qui fouille pour toi : tout part de là. Mise à jour à chaque ouverture et plusieurs fois par jour.</Doux>
       <Carte style={{ gap: 10 }}>
         {GARANTIES.map((g) => (
           <View key={g} style={{ flexDirection: 'row', gap: 10 }}>

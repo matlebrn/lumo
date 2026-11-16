@@ -314,3 +314,8 @@ button.cat { display: block; width: 100%; text-align: left; }
 .mini i { display: block; width: 100%; max-width: 18px; border-radius: 4px 4px 0 0; }
 .mini span { font-size: 10px; color: var(--pale); }
 .feuille .bouton svg { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; }
+.paie-barres { display: flex; align-items: flex-end; gap: 4px; height: 76px; margin: 16px 0 10px; }
+.paie-barres .pb { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.paie-barres i { width: 100%; max-width: 18px; border-radius: 4px 4px 0 0; background: var(--plus, #4fbf8a); opacity: .75; }
+.paie-barres i.prime { background: var(--or, #d9b36a); opacity: 1; }
+.paie-barres span { font-size: 10px; color: var(--doux); }
