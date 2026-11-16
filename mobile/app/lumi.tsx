@@ -19,6 +19,11 @@ type Echange = { role: 'user' | 'assistant'; content: string | Bloc[] };
 type Bulle = { qui: 'moi' | 'lumi'; texte: string; recherches?: number };
 const IDEES = ['Regarde tous mes paiements pour ma voiture, ça fait combien ?', 'Quand était mon premier loyer ?', 'Où est-ce que je peux économiser ?', 'Combien je dépense en restos par mois ?'];
 const TOURS = 8;
+// Lumi met en gras avec **…** : on l'affiche en gras, sans les étoiles
+function Riche({ texte, couleur }: { texte: string; couleur: string }) {
+  const morceaux = texte.split(/(\*\*[^*]+\*\*)/g);
+  return <Text style={{ color: couleur, fontFamily: F.sans, fontSize: 15.5, lineHeight: 22 }}>{morceaux.map((m, i) => (/^\*\*[^*]+\*\*$/.test(m) ? <Text key={i} style={{ fontFamily: F.sansGras }}>{m.slice(2, -2)}</Text> : m))}</Text>;
+}
 const LIBELLES_OUTILS: Record<string, string> = { chercher_operations: 'cherche dans tes opérations', regrouper: 'fait les totaux', libelles: 'regarde tes libellés', comptes: 'regarde tes comptes', budget: 'regarde ton budget' };
 
 export default function Lumi() {
@@ -86,7 +91,7 @@ export default function Lumi() {
             <View key={i} style={m.qui === 'moi'
               ? { alignSelf: 'flex-end', maxWidth: '86%', backgroundColor: C.or, borderRadius: 18, borderBottomRightRadius: 6, padding: 12 }
               : { alignSelf: 'flex-start', maxWidth: '90%', backgroundColor: C.carte, borderRadius: 18, borderBottomLeftRadius: 6, padding: 12, borderWidth: 1, borderColor: C.trait }}>
-              <Text style={{ color: m.qui === 'moi' ? C.surOr : C.texte, fontFamily: F.sans, fontSize: 15.5, lineHeight: 22 }}>{m.texte}</Text>
+              <Riche texte={m.texte} couleur={m.qui === 'moi' ? C.surOr : C.texte} />
               {!!m.recherches && <Text style={{ color: C.pale, fontFamily: F.sans, fontSize: 12, marginTop: 6 }}>{`${m.recherches} recherche${m.recherches > 1 ? 's' : ''} dans tes comptes`}</Text>}
             </View>
           ))}
