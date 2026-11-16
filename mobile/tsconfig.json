@@ -8,6 +8,9 @@
       ],
       "@moteur": [
         "../packages/moteur/moteur"
+      ],
+      "@outils": [
+        "../packages/moteur/outils"
       ]
     }
   },
@@ -16,6 +19,7 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",
-    "../packages/moteur/moteur.d.ts"
+    "../packages/moteur/moteur.d.ts",
+    "../packages/moteur/outils.d.ts"
   ]
 }

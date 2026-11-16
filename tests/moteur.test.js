@@ -313,6 +313,5 @@ test('liste des opérations : virements internes et hésitations repérés', () 
 test('l’appli web sert la même version du moteur que l’appli mobile', () => {
   const fs = require('node:fs'), path = require('node:path');
   const a = fs.readFileSync(path.join(__dirname, '..', 'packages/moteur/moteur.js'), 'utf8');
-  const b = fs.readFileSync(path.join(__dirname, '..', 'public/moteur.js'), 'utf8');
-  assert.equal(a, b, 'lance scripts/copier-moteur.sh');
+  assert.equal(fs.readFileSync(path.join(__dirname, '..', 'public/moteur.js'), 'utf8'), a, 'lance scripts/copier-moteur.sh');
 });
