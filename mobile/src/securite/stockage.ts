@@ -33,3 +33,6 @@ export const coffre = {
     await SecureStore.deleteItemAsync(`${k}.n`, options);
   },
 };
+
+// la personne a choisi de connecter sa banque plus tard (on ne le lui repropose pas à chaque ouverture)
+export const CLE_PLUS_TARD = 'lumo.banque-plus-tard';

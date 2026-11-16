@@ -6,7 +6,7 @@ import { usePret } from '@/donnees/Donnees';
 import { eur, leJour, MOIS, t } from '@/i18n';
 import { BoutonLumi } from '@/lumi/BoutonLumi';
 import { C, F } from '@/theme';
-import { Avis, Carte, Doux, Ecran, Gros, Ligne, Rail, T, Titre, s as S } from '@/ui/base';
+import { Avis, Bouton, Carte, Doux, Ecran, Gros, Ligne, Rail, T, Titre, s as S } from '@/ui/base';
 import { Jauge, Spark } from '@/ui/graphiques';
 import { Icone } from '@/ui/Icone';
 import { NOM_CAT } from '@moteur';
@@ -78,6 +78,14 @@ export default function Aujourdhui() {
             </>
           )}
         </>
+      )}
+
+      {!s.avecBanque && (
+        <Carte>
+          <T style={{ fontFamily: F.sansGras }}>Connecte ta banque</T>
+          <Doux style={{ marginTop: 4, marginBottom: 14 }}>Lumo suivra ce que tu dépenses depuis ta paie, classera tes opérations et te préviendra avant un découvert.</Doux>
+          <Bouton texte="Connecter ma banque" onPress={() => router.push('/banque')} />
+        </Carte>
       )}
 
       {b.assez && b.niveau && (

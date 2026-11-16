@@ -1,4 +1,5 @@
 // Réglages : verrouillage Face ID, style de Lumi, et ce que Lumo fait (et ne fait pas) de tes données.
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 import { usePret } from '@/donnees/Donnees';
@@ -21,6 +22,8 @@ export default function Reglages() {
           <Switch value={verrou.actif} onValueChange={(v) => { verrou.changer(v); }} trackColor={{ true: C.or, false: '#34322e' }} thumbColor={verrou.actif ? C.surOr : '#c9c5bc'} accessibilityLabel={t('reglages.verrou')} />
         </Carte>
       )}
+      <Titre>Banque</Titre>
+      <Bouton texte="Connecter une banque" second onPress={() => router.push('/banque')} />
       <Titre>{t('reglages.styleLumi')}</Titre>
       {!!erreur && <Text style={{ color: C.moins, fontFamily: F.sans, marginBottom: 8 }}>{erreur}</Text>}
       {STYLES.map((s) => {

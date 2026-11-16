@@ -13,6 +13,7 @@ const TRACES = {
   fermer: <Path d="M6 6l12 12M18 6L6 18" />,
   envoyer: <Path d="M12 19V5M6 11l6-6 6 6" />,
   suite: <Path d="M9 6l6 6-6 6" />,
+  loupe: <><Circle cx="11" cy="11" r="6.5" /><Path d="M16 16l4.5 4.5" /></>,
 };
 export type NomIcone = keyof typeof TRACES;
 

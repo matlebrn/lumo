@@ -33,6 +33,7 @@ export default function Racine() {
               <Stack.Screen name="reglages" options={{ presentation: 'modal' }} />
               <Stack.Screen name="operation" options={{ presentation: 'modal' }} />
               <Stack.Screen name="plus" options={{ presentation: 'modal' }} />
+              <Stack.Screen name="banque" options={{ presentation: 'modal' }} />
             </Stack>
           </DonneesProvider>
         </Verrou>

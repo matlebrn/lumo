@@ -187,8 +187,11 @@ async function routeUtilisateur(req: Request, path: string): Promise<Response> {
     const banque = String(body.banque || "");
     const { data: bk } = await db.from("eb_banks").select("max_days").eq("name", banque).eq("country", "FR").maybeSingle();
     if (!bk) return J({ ok: false, msg: "Banque inconnue" }, 400);
+    // version gratuite : une banque (on peut toujours renouveler l'accès à celle-ci)
+    const { data: plan } = await db.rpc("plan_de", { uid });
+    if (plan !== "plus" && miennes.some((x: any) => x.status === "AUTHORIZED" && x.bank !== banque)) return J({ ok: false, code: "limite", msg: "La version gratuite connecte une banque. Lumo Plus les connecte toutes." }, 403);
     const state = crypto.randomUUID();
-    await db.from("eb_states").insert({ state, bank: banque, country: "FR", user_id: uid });
+    await db.from("eb_states").insert({ state, bank: banque, country: "FR", user_id: uid, retour: body.retour === "appli" ? "appli" : "web" });
     const jours = Math.min(bk.max_days ? Math.max(1, bk.max_days) : 90, 180);
     const r = await eb("/auth", { method: "POST", body: JSON.stringify({ access: { valid_until: new Date(Date.now() + jours * 864e5 - 60e3).toISOString() }, aspsp: { name: banque, country: "FR" }, state, redirect_url: `${FN}/callback`, psu_type: "personal", language: "fr" }) });
     return J({ ok: true, url: r.url });
@@ -225,12 +228,15 @@ Deno.serve(async (req) => {
       return pasActivee(m) ? J({ ok: false, code: "pas_activee", msg: "La connexion bancaire n’est pas encore activée." }, 503) : J({ ok: false, msg: m }, 500);
     }));
   }
-  const retour = (etat: string) => Response.redirect(`${APPLI}/?banque=${etat}`, 302);
+  // après la banque : retour dans l'appli iPhone / Android, ou sur le site (deux destinations fixes)
+  let vers = "web";
+  const retour = (etat: string) => Response.redirect(vers === "appli" ? `lumo://banque?etat=${etat}` : `${APPLI}/?banque=${etat}`, 302);
   try {
     if (path === "/callback") { // retour de la banque après l'accord de l'utilisateur
       const code = u.searchParams.get("code"), state = u.searchParams.get("state") ?? "";
-      if (u.searchParams.get("error")) return retour("annulee");
       const { data: st } = await db.from("eb_states").select("*").eq("state", state).maybeSingle();
+      if (st?.retour === "appli") vers = "appli";
+      if (u.searchParams.get("error")) return retour("annulee");
       if (!st || !code || !st.user_id || Date.now() - new Date(st.created_at).getTime() > 45 * 60e3) return retour("expiree");
       await db.from("eb_states").delete().eq("state", state);
       const s = await eb("/sessions", { method: "POST", body: JSON.stringify({ code }) });
