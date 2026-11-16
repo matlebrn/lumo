@@ -71,13 +71,49 @@ test('un projet se crée et répond en direct', async () => {
 });
 
 test('le budget se modifie et change le reste mensuel', async () => {
-  await page.click('.onglets [data-v=budget]');
-  const avant = await page.textContent('.entete .sous');
+  await page.click('.onglets [data-v=analyse]');
+  await page.click('[data-a=analyse-vue][data-v=budget]');
+  const avant = await page.textContent('.ecran > p.doux');
   await page.click('[data-a=nouveau-flux][data-sens=revenu]');
   await page.fill('[data-f=montant]', '200');
   await page.click('[data-a=enregistrer-flux]');
-  await page.waitForFunction((a) => document.querySelector('.entete .sous').textContent !== a, avant);
-  assert.match((await page.textContent('.entete .sous')).replace(/\s/g, ''), /657€/);
+  await page.waitForFunction((a) => document.querySelector('.ecran > p.doux').textContent !== a, avant);
+  assert.match((await page.textContent('.ecran > p.doux')).replace(/\s/g, ''), /657€/);
+});
+
+test('analyse : bilan noté, graphique des 12 mois, ce qui va, plan, abonnements', async () => {
+  await page.click('.onglets [data-v=analyse]');
+  await page.click('[data-a=analyse-vue][data-v=bilan]');
+  const t = await page.textContent('#app');
+  assert.match(t, /Ta santé financière/);
+  assert.match(t, /Ce qui rentre, ce qui sort/);
+  assert.match(t, /Ce qui va bien/);
+  assert.match(t, /Où part ton argent/);
+  assert.match(t, /Ta répartition/);
+  assert.match(t, /Tes abonnements/);
+  assert.match(t, /Lumo hésite sur/);
+  assert.equal(await page.locator('.barres-mois .cible').count(), 12);
+  await page.click('.barres-mois .cible >> nth=2');
+  assert.ok(await page.locator('.barres-mois rect[rx="8"]').count() === 1);
+  await page.click('[data-a=voir-cat] >> nth=0');
+  assert.match(await page.textContent('.feuille'), /par mois/);
+  await page.click('[data-a=fermer]');
+});
+
+test('opérations : Lumo hésite, on classe, la règle s’applique à toutes', async () => {
+  const avant = await page.evaluate(() => window.Lumo.S.ops.filter((o) => o.hesite).length);
+  assert.ok(avant > 0);
+  await page.click('[data-a=classer] >> nth=0');
+  assert.match(await page.textContent('.feuille'), /C’est quoi/);
+  await page.click('.feuille [data-a=ranger][data-c=sorties]');
+  const apres = await page.evaluate(() => window.Lumo.S.ops.filter((o) => o.hesite).length);
+  assert.ok(apres < avant);
+  await page.click('[data-a=fermer]');
+  await page.click('[data-a=analyse-vue][data-v=operations]');
+  assert.ok(await page.locator('[data-a=operation]').count() >= 60);
+  await page.click('[data-a=operation] >> nth=0');
+  await page.click('.feuille [data-a=ranger][data-c=maison]');
+  assert.equal(await page.evaluate(() => window.Lumo.S.ops[0].categorie), 'maison');
 });
 
 test('les réglages et Lumi s’ouvrent, sans erreur de page', async () => {

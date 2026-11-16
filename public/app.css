@@ -257,3 +257,60 @@ h1, h2, h3, p { margin: 0; }
 .cat .rail i.haut { background: var(--alerte); }
 .cat .rail b { position: absolute; top: -3px; width: 2px; height: 12px; margin-left: -1px; background: var(--texte); opacity: .55; border-radius: 1px; }
 .groupe { font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--pale); padding: 12px 0 0; }
+
+/* Analyse */
+.segments { margin: -4px 0 16px; }
+.segments button { position: relative; }
+.point-or { position: absolute; top: 8px; right: 10px; width: 6px; height: 6px; border-radius: 3px; background: var(--or); }
+.bilan-tete { display: flex; gap: 16px; align-items: center; }
+.bilan-tete .phrase { color: var(--doux); font-size: 13.5px; }
+.bilan-tete p { font-size: 14.5px; margin-top: 2px; }
+.niveau { font-family: var(--serif); font-size: 30px; line-height: 1.1; }
+.niveau.bon { color: var(--or-clair); } .niveau.alerte { color: var(--alerte); } .niveau.rouge { color: var(--moins); }
+.jauge { width: 104px; height: 104px; flex: none; }
+.jauge-n { font-family: var(--serif); font-size: 34px; fill: var(--texte); }
+.jauge-s { font-size: 10.5px; fill: var(--pale); }
+.lien-bilan { display: flex; width: 100%; text-align: left; gap: 14px; align-items: center; }
+.lien-bilan .jauge { width: 64px; height: 64px; } .lien-bilan > div { flex: 1; }
+.lien-bilan .niveau { font-size: 22px; display: block; font-weight: 400; }
+.avis.bloc { width: 100%; text-align: left; }
+.barres-mois { display: block; width: 100%; height: auto; }
+.barres-mois text { font-size: 10.5px; fill: var(--pale); } .barres-mois text.sel { fill: var(--texte); font-weight: 600; }
+.barres-mois .cible { cursor: pointer; }
+.carre { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 7px; vertical-align: 0; }
+.legende i.carre { border: 0; width: 9px; height: 9px; }
+.lecture-mois { border-top: 1px solid var(--trait); margin-top: 12px; padding-top: 12px; }
+.lecture-mois > b { display: block; font-weight: 600; margin-bottom: 8px; }
+.points { display: grid; gap: 14px; }
+.point { display: flex; gap: 12px; align-items: flex-start; }
+.point > i { flex: none; width: 24px; height: 24px; border-radius: 12px; display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: 13px; }
+.point.bon > i { background: rgba(143, 207, 168, .14); color: var(--plus); }
+.point.alerte > i { background: rgba(233, 184, 114, .14); color: var(--alerte); }
+.point.rouge > i { background: rgba(231, 147, 130, .14); color: var(--moins); }
+.point b { display: block; font-weight: 600; } .point span { color: var(--doux); font-size: 14px; }
+.plan { display: grid; gap: 14px; }
+.etape { display: flex; gap: 12px; align-items: flex-start; }
+.etape .num { flex: none; width: 26px; height: 26px; border-radius: 13px; background: linear-gradient(135deg, var(--or-clair), var(--or)); color: #1a1408; display: grid; place-items: center; font-weight: 700; font-size: 13px; }
+.etape > div { flex: 1; } .etape b { display: block; font-weight: 600; } .etape span { color: var(--doux); font-size: 14px; }
+.etape em { font-style: normal; color: var(--plus); font-weight: 600; white-space: nowrap; font-size: 14px; } .etape em small { color: var(--doux); font-weight: 400; }
+.plan .reste { margin-top: 0; } .plan .reste b small { font-family: var(--sans); font-size: 13px; color: var(--doux); }
+.plan .bouton svg { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; }
+button.cat { display: block; width: 100%; text-align: left; }
+.sous-titre { text-transform: none; letter-spacing: 0; font-weight: 500; font-size: 12.5px; }
+.pile { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; }
+.pile i { display: block; min-width: 4px; }
+.pile-leg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.pile-leg span { display: block; color: var(--doux); font-size: 12.5px; white-space: nowrap; }
+.pile-leg b { display: block; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pile-leg small { color: var(--pale); font-size: 11.5px; }
+.filtres { margin: 0 0 14px; } .filtres button { font-size: 13px; }
+.mois-tete { display: flex; justify-content: space-between; padding-bottom: 4px; }
+.mois-tete span:last-child { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.grille-cat { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+.grille-cat button { text-align: left; background: var(--carte2); border: 1px solid var(--trait); border-radius: 12px; padding: 11px 12px; font-size: 14px; }
+.grille-cat button.actif { border-color: var(--or); color: var(--or-clair); }
+.mini { display: flex; gap: 4px; align-items: flex-end; height: 110px; margin: 4px 0 8px; }
+.mini div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.mini i { display: block; width: 100%; max-width: 18px; border-radius: 4px 4px 0 0; }
+.mini span { font-size: 10px; color: var(--pale); }
+.feuille .bouton svg { width: 18px; height: 18px; vertical-align: -3px; margin-right: 6px; }

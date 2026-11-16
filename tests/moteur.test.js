@@ -156,7 +156,12 @@ const FLUX = [{ nom: 'Loyer', sens: 'depense', montant: 640, frequence: 'mois' }
 
 test('catégories des libellés bancaires', () => {
   assert.equal(M.categorie('CB CARREFOUR MARKET 12/11'), 'courses');
-  assert.equal(M.categorie('PRLV SEPA EDF CLIENTS'), 'factures');
+  assert.equal(M.categorie('PRLV SEPA EDF CLIENTS'), 'logement');
+  assert.equal(M.categorie('PRLV SEPA MAIF ASSURANCE'), 'assurances');
+  assert.equal(M.categorie('PRLV COFIDIS ECHEANCE'), 'credits');
+  assert.equal(M.categorie('COTIS CARTE VISA'), 'frais');
+  assert.equal(M.categorie('PRLV FREE MOBILE'), 'telecom');
+  assert.equal(M.categorie({ libelle: 'VIR SALAIRE', montant: 2000 }), 'revenu');
   assert.equal(M.categorie('CB TOTAL ACCESS DOLE'), 'carburant');
   assert.equal(M.categorie('CB UBER EATS'), 'sorties');
   assert.equal(M.categorie('CB NETFLIX.COM'), 'abonnements');
@@ -233,4 +238,74 @@ test('un prélèvement annuel ne compte que dans son mois', () => {
   const flux = [...FLUX, { nom: 'Impôts locaux', sens: 'depense', montant: 420, frequence: 'an', mois: 10 }, { nom: 'Assurance auto', sens: 'depense', montant: 380, frequence: 'an', mois: 11 }];
   const s = M.suiviMois({ comptes: COMPTES, operations: banque(auj), flux }, auj);
   assert.deepEqual(s.aVenir.map((x) => x.nom), ['Assurance auto']);
+});
+
+/* ---------- bilan et classement ---------- */
+test('une règle de l’utilisateur l’emporte sur le libellé, pour toutes les opérations du même genre', () => {
+  const o = { libelle: 'CB INCONNU SARL 12/11', montant: -42 };
+  assert.equal(M.categorie(o), 'autres');
+  assert.ok(M.aClasser(o));
+  const regles = { [M.cleRegle(o)]: 'sorties' };
+  assert.equal(M.categorie({ libelle: 'CB INCONNU SARL 03/12', montant: -18 }, regles), 'sorties');
+  assert.equal(M.aClasser(o, regles), false);
+  assert.equal(M.categorie({ libelle: 'CB INCONNU SARL', montant: 18 }, regles), 'revenu'); // remboursement : autre sens
+});
+
+test('bilan : moyennes des 3 derniers mois complets, épargne de secours, pas de découvert', () => {
+  const auj = new Date(2026, 10, 12);
+  const b = M.bilan({ comptes: [{ ...COMPTES[0], solde: 5000 }, COMPTES[1], COMPTES[2]], operations: banque(auj), flux: FLUX }, auj);
+  assert.equal(b.avecBanque, true);
+  assert.equal(b.mois.filter((m) => !m.enCours).length, 4); // juillet à octobre
+  assert.equal(b.revenus, 2150);
+  assert.equal(b.depenses, 640 + 118 + 240 + 55);
+  assert.equal(b.net, 2150 - 1053);
+  assert.equal(b.mois[0].misDeCote, 200); // le livret n'est pas une dépense
+  assert.equal(b.joursRouge, 0);
+  assert.ok(b.moisSecurite > 6); // 6 400 € de livret ; l’assurance vie est un placement
+  assert.ok(b.note >= 75, `note ${b.note}`);
+  assert.equal(b.niveau.nom, 'Solide');
+  assert.ok(b.va.some((p) => /Aucun découvert/.test(p.titre)));
+  assert.equal(b.categories[0].id, 'logement');
+  assert.equal(b.categories.find((c) => c.id === 'courses').groupe, 'besoin');
+});
+
+test('bilan en difficulté : plus de sorties que de rentrées, découvert, plan pour s’en sortir', () => {
+  const auj = new Date(2026, 10, 12);
+  const ops = banque(auj, { courses: 200, livret: false });
+  for (const m of [7, 8, 9]) {
+    const mm = String(m + 1).padStart(2, '0');
+    ops.push({ date: `2026-${mm}-15`, montant: -620, libelle: 'CB UBER EATS', compte_id: 'cc' });
+    ops.push({ date: `2026-${mm}-16`, montant: -15.99, libelle: 'CB NETFLIX.COM', compte_id: 'cc' });
+    ops.push({ date: `2026-${mm}-16`, montant: -12.99, libelle: 'CB SPOTIFY', compte_id: 'cc' });
+    ops.push({ date: `2026-${mm}-20`, montant: -8, libelle: 'COMMISSION INTERVENTION', compte_id: 'cc' });
+  }
+  const b = M.bilan({ comptes: [{ id: 'cc', nom: 'Compte courant', type: 'courant', solde: -150 }], operations: ops, flux: FLUX }, auj);
+  assert.ok(b.net < 0);
+  assert.equal(b.difficulte, true);
+  assert.ok(b.joursRouge > 0);
+  assert.equal(b.frais, 24);
+  assert.equal(b.abonnements.length, 2);
+  assert.ok(b.vaPas.some((p) => /plus que tu ne gagnes/.test(p.titre)));
+  assert.match(b.plan[0].titre, /^Trouver/);
+  assert.ok(b.plan.some((a) => /abonnements/.test(a.titre)));
+  assert.ok(b.plan.some((a) => /Restaurants/.test(a.titre)));
+  assert.ok(b.plan.some((a) => /matelas/.test(a.titre)));
+  assert.ok(b.gains > 0);
+  assert.ok(b.note < 35, `note ${b.note}`);
+});
+
+test('bilan sans banque : d’après le budget saisi', () => {
+  const b = M.bilan({ comptes: [{ id: 'x', nom: 'Mes comptes', type: 'courant', solde: 900 }], operations: [], flux: [...FLUX, { nom: 'Netflix', sens: 'depense', montant: 13.49, frequence: 'mois' }], mensuel: { revenus: 2000, fixes: 771.49, courant: 600 } });
+  assert.equal(b.avecBanque, false);
+  assert.equal(b.net, 2000 - 771 - 600 + 0);
+  assert.equal(b.abonnements.length, 1);
+  assert.ok(b.categories.some((c) => c.id === 'courant'));
+});
+
+test('liste des opérations : virements internes et hésitations repérés', () => {
+  const auj = new Date(2026, 10, 12);
+  const L = M.listeOperations([...banque(auj), { date: '2026-11-11', montant: -30, libelle: 'CB XYZ SAS', compte_id: 'cc' }], COMPTES, {});
+  assert.equal(L.find((o) => o.libelle === 'CB XYZ SAS').hesite, true);
+  assert.equal(L.find((o) => o.libelle === 'CB CARREFOUR MARKET').hesite, false);
+  assert.ok(L.some((o) => o.interne && o.categorie === 'interne'));
 });

@@ -216,26 +216,45 @@
   /* ---------- argent au quotidien : comptes, mois en cours, alertes ----------
      Tout part des opérations bancaires (date, montant signé, libellé, compte_id) et des soldes actuels. */
   const MAJ = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  // [id, nom, groupe (besoin : on ne peut guère s'en passer ; envie : on choisit), repère dans le libellé]
   const CATEGORIES = [
-    ['retraits', 'Retraits', /RETRAIT|\bDAB\b|\bGAB\b/],
-    ['courses', 'Courses', /CARREFOUR|LECLERC|INTERMARCHE|AUCHAN|LIDL|ALDI|SUPER U|HYPER U|U EXPRESS|MONOPRIX|FRANPRIX|CASINO|NETTO|GRAND FRAIS|PICARD|BIOCOOP|SPAR|COCCINELLE|MARKET|SUPERMARCHE|EPICERIE|BOULANGER(?!.*ELECTRO)|BOUCHERIE|PRIMEUR/],
-    ['carburant', 'Carburant', /ESSO|SHELL|\bBP\b|AVIA|DYNEFF|AGIP|CARBU|STATION|RELAIS|TOTAL(?!ENERGIES (ELEC|GAZ|CLIENT))/],
-    ['factures', 'Logement et factures', /LOYER|\bEDF\b|ENGIE|TOTALENERGIES|EKWATEUR|VEOLIA|SUEZ|SAUR|ORANGE|\bSFR\b|FREE MOBILE|FREE TELECOM|FREEBOX|BOUYGUES|SOSH|RED BY|ASSURANCE|MAIF|MACIF|MATMUT|\bAXA\b|GROUPAMA|ALLIANZ|AREAS|\bMMA\b|\bGMF\b|MUTUELLE|IMPOT|DGFIP|TRESOR PUBLIC|SYNDIC|CREDIT|ECHEANCE PRET/],
-    ['abonnements', 'Abonnements', /NETFLIX|SPOTIFY|DEEZER|DISNEY|CANAL|PRIME VIDEO|AMAZON PRIME|APPLE ?COM|ITUNES|ICLOUD|GOOGLE|PLAYSTATION|XBOX|NINTENDO|YOUTUBE|BASIC ?FIT|FITNESS|KEEP COOL/],
-    ['sorties', 'Restaurants et sorties', /MC ?DO|MCDONALD|BURGER|\bKFC\b|QUICK|SUBWAY|UBER ?EATS|DELIVEROO|JUST ?EAT|RESTAU|PIZZ|SUSHI|KEBAB|TACOS|BRASSERIE|\bBAR\b|CAFE|CINEMA|PATHE|\bCGR\b|BOWLING/],
-    ['transport', 'Transports', /SNCF|OUIGO|\bTER\b|UBER|BOLT|BLABLA|PEAGE|APRR|SANEF|VINCI AUTO|PARKING|INDIGO|RATP|NAVIGO|TAXI|LIME/],
-    ['enligne', 'Achats en ligne', /AMAZON|CDISCOUNT|ZALANDO|SHEIN|TEMU|ALIEXPRESS|VINTED|LEBONCOIN|EBAY|FNAC|DARTY|BOULANGER|PAYPAL/],
-    ['maison', 'Maison et bricolage', /LEROY|CASTORAMA|BRICO|IKEA|\bBUT\b|CONFORAMA|MAISONS DU MONDE|\bACTION\b|GIFI|FOIRFOUILLE|JARDI/],
-    ['vetements', 'Vêtements et sport', /KIABI|DECATHLON|H ?& ?M|\bZARA\b|PRIMARK|CELIO|JULES|INTERSPORT|GO SPORT|NIKE|ADIDAS|SNIPES|COURIR/],
-    ['sante', 'Santé', /PHARMA|DOCTEUR|\bDR\b|MEDECIN|DENTIST|OPTIC|KINE|LABO|HOPITAL|CLINIQUE|OSTEO/],
+    ['frais', 'Frais bancaires', 'besoin', /\bFRAIS\b|COTIS|COMMISSION|AGIOS|INTERETS? DEBIT|INT DEBIT|\bREJET\b|\bOPPOSITION\b/],
+    ['retraits', 'Retraits', 'envie', /RETRAIT|\bDAB\b|\bGAB\b/],
+    ['credits', 'Crédits', 'besoin', /ECHEANCE PRET|\bPRET\b|COFIDIS|CETELEM|SOFINCO|\bFLOA\b|\bONEY\b|FRANFINANCE|YOUNITED|CREDIT (AUTO|CONSO|IMMO|RENOUV)|LOCATION LONGUE|\bLOA\b|\bLLD\b|PAIEMENT EN \d|PAYPAL 4X|KLARNA|ALMA/],
+    ['impots', 'Impôts', 'besoin', /IMPOT|DGFIP|TRESOR PUBLIC|FINANCES PUBLIQUES|AMENDE|\bANTAI\b/],
+    ['assurances', 'Assurances et mutuelle', 'besoin', /ASSURANCE|ASSUR\b|MAIF|MACIF|MATMUT|\bAXA\b|GROUPAMA|ALLIANZ|AREAS|\bMMA\b|\bGMF\b|MUTUELLE|HARMONIE|MALAKOFF|AG2R|APRIL|LUKO|\bPACIFICA\b/],
+    ['logement', 'Logement et énergie', 'besoin', /LOYER|\bEDF\b|ENGIE|TOTALENERGIES|EKWATEUR|VATTENFALL|OHM ENERGIE|MINT ENERGIE|VEOLIA|SUEZ|SAUR|\bEAU\b|SYNDIC|FONCIA|NEXITY|CITYA|OFFICE HLM|HABITAT/],
+    ['telecom', 'Téléphone et internet', 'besoin', /ORANGE|\bSFR\b|FREE MOBILE|FREE TELECOM|FREEBOX|BOUYGUES|\bSOSH\b|RED BY|PRIXTEL|LA POSTE MOBILE|\bB AND YOU\b/],
+    ['courses', 'Courses', 'besoin', /CARREFOUR|LECLERC|INTERMARCHE|AUCHAN|LIDL|ALDI|SUPER U|HYPER U|U EXPRESS|MONOPRIX|FRANPRIX|CASINO|NETTO|GRAND FRAIS|PICARD|BIOCOOP|SPAR|COCCINELLE|MARKET|SUPERMARCHE|EPICERIE|BOULANGER(?!.*ELECTRO)|BOUCHERIE|PRIMEUR|COLRUYT|MATCH\b/],
+    ['carburant', 'Carburant', 'besoin', /ESSO|SHELL|\bBP\b|AVIA|DYNEFF|AGIP|CARBU|STATION|RELAIS|TOTAL(?!ENERGIES (ELEC|GAZ|CLIENT))|IONITY|TESLA SUPERCHARG/],
+    ['transport', 'Transports', 'besoin', /SNCF|OUIGO|\bTER\b|UBER(?! ?EATS)|BOLT|BLABLA|PEAGE|APRR|SANEF|VINCI AUTO|PARKING|INDIGO|RATP|NAVIGO|TAXI|LIME|NORAUTO|FEU VERT|SPEEDY|MIDAS|GARAGE|CONTROLE TECH/],
+    ['sante', 'Santé', 'besoin', /PHARMA|DOCTEUR|\bDR\b|MEDECIN|DENTIST|OPTIC|KINE|LABO|HOPITAL|CLINIQUE|OSTEO|DOCTOLIB/],
+    ['abonnements', 'Abonnements', 'envie', /NETFLIX|SPOTIFY|DEEZER|DISNEY|CANAL|PRIME VIDEO|AMAZON PRIME|APPLE ?COM|ITUNES|ICLOUD|GOOGLE|PLAYSTATION|XBOX|NINTENDO|YOUTUBE|BASIC ?FIT|FITNESS|KEEP COOL|ON AIR|CHATGPT|OPENAI|CLAUDE|ANTHROPIC|TWITCH|DAZN|BEIN|MOLOTOV|AUDIBLE|KINDLE/],
+    ['sorties', 'Restaurants et sorties', 'envie', /MC ?DO|MCDONALD|BURGER|\bKFC\b|QUICK|SUBWAY|UBER ?EATS|DELIVEROO|JUST ?EAT|RESTAU|PIZZ|SUSHI|KEBAB|TACOS|BRASSERIE|\bBAR\b|CAFE|CINEMA|PATHE|\bCGR\b|BOWLING|STARBUCKS|O TACOS|FIVE GUYS|BOUTIQUE ?TABAC|TABAC|FDJ/],
+    ['enligne', 'Achats en ligne', 'envie', /AMAZON|CDISCOUNT|ZALANDO|SHEIN|TEMU|ALIEXPRESS|VINTED|LEBONCOIN|EBAY|FNAC|DARTY|BOULANGER|PAYPAL|APPLE STORE|BACK MARKET/],
+    ['maison', 'Maison et bricolage', 'envie', /LEROY|CASTORAMA|BRICO|IKEA|\bBUT\b|CONFORAMA|MAISONS DU MONDE|\bACTION\b|GIFI|FOIRFOUILLE|JARDI|WELDOM/],
+    ['vetements', 'Vêtements et sport', 'envie', /KIABI|DECATHLON|H ?& ?M|\bZARA\b|PRIMARK|CELIO|JULES|INTERSPORT|GO SPORT|NIKE|ADIDAS|SNIPES|COURIR|SEPHORA|COIFF/],
   ];
   const NOM_CAT = Object.fromEntries(CATEGORIES.map(([i, nom]) => [i, nom]));
-  NOM_CAT.autres = 'Autres dépenses';
-  function categorie(libelle) {
-    const t = MAJ(libelle);
-    for (const [i, , re] of CATEGORIES) if (re.test(t)) return i;
+  NOM_CAT.autres = 'Autres dépenses'; NOM_CAT.revenu = 'Rentrée'; NOM_CAT.interne = 'Entre mes comptes';
+  const GROUPE = Object.fromEntries(CATEGORIES.map(([i, , g]) => [i, g])); GROUPE.autres = 'envie';
+  // ce que l'utilisateur peut choisir pour une dépense, dans l'ordre d'affichage
+  const CHOIX_DEPENSE = ['courses', 'logement', 'telecom', 'assurances', 'credits', 'impots', 'carburant', 'transport', 'sante', 'abonnements', 'sorties', 'enligne', 'maison', 'vetements', 'retraits', 'frais', 'autres', 'interne'];
+  const CHOIX_RENTREE = ['revenu', 'interne'];
+  // repère d'une règle de classement : le début du libellé et le sens de l'opération
+  const cleRegle = (o) => (cle(o.libelle) || MAJ(o.libelle).replace(/[^A-Z ]+/g, ' ').trim().slice(0, 40) || '?') + (+o.montant >= 0 ? '+' : '-');
+  /* Catégorie d'une opération : règle choisie par l'utilisateur d'abord, sinon le libellé.
+     Accepte aussi un simple libellé (une dépense). */
+  function categorie(o, regles) {
+    if (typeof o !== 'object' || o == null) o = { libelle: o, montant: -1 };
+    if (regles) { const r = regles[cleRegle(o)]; if (r) return r; }
+    if (+o.montant >= 0) return 'revenu';
+    const t = MAJ(o.libelle);
+    for (const [i, , , re] of CATEGORIES) if (re.test(t)) return i;
     return 'autres';
   }
+  // Lumo hésite : une dépense que rien ne classe et que l'utilisateur n'a pas encore rangée
+  const aClasser = (o, regles) => +o.montant < 0 && !(regles && regles[cleRegle(o)]) && categorie(o) === 'autres';
   const EPARGNE_LIBELLE = /LIVRET|EPARGNE|\bLDD\b|\bLEP\b|\bPEL\b|\bCEL\b|ASSURANCE VIE|\bPEA\b|\bPER\b/;
   // genre d'un compte pour l'affichage : disponible, épargne, placement
   function genre(c) {
@@ -254,7 +273,7 @@
   }
 
   // virements entre ses propres comptes : ni une dépense, ni un revenu
-  function marquerInternes(ops, comptes) {
+  function marquerInternes(ops, comptes, regles) {
     const genreDe = new Map((comptes || []).map((c) => [c.id, genre(c)]));
     const L = ops.map((o) => ({ ...o, montant: +o.montant, d: jour(o.date), interne: false, versEpargne: false }));
     const pos = L.filter((o) => o.montant > 0);
@@ -268,6 +287,7 @@
         o.interne = true; o.versEpargne = true;
       }
     }
+    if (regles) for (const o of L) if (!o.interne && regles[cleRegle(o)] === 'interne') o.interne = true;
     return L;
   }
 
@@ -294,11 +314,11 @@
   }
 
   /* Le mois en cours : depuis la dernière paie (ou le 1er du mois sans paie repérée) jusqu'à la prochaine. */
-  function suiviMois({ comptes, operations, flux }, maintenant) {
+  function suiviMois({ comptes, operations, flux, regles }, maintenant) {
     const auj = maintenant ? new Date(maintenant) : new Date(); auj.setHours(12, 0, 0, 0);
     const courants = (comptes || []).filter((c) => genre(c) === 'courant');
     const soldeCourant = courants.reduce((s, c) => s + n(c.solde), 0);
-    const L = marquerInternes(operations || [], comptes);
+    const L = marquerInternes(operations || [], comptes, regles);
     const paie = trouverPaie(L, auj);
     let debut, fin;
     if (paie) { debut = new Date(paie.derniere); fin = new Date(paie.prochaine); }
@@ -312,7 +332,7 @@
     const dans = (o, a, b) => o.d >= a && o.d < b;
     const periode = L.filter((o) => dans(o, debut, new Date(auj.getTime() + JOUR_MS)) && surCourant(o));
     const depenses = periode.filter((o) => o.montant < 0 && !o.interne);
-    const parCat = (ops) => { const m = {}; for (const o of ops) { const c = categorie(o.libelle); m[c] = (m[c] || 0) - o.montant; } return m; };
+    const parCat = (ops) => { const m = {}; for (const o of ops) { const c = categorie(o, regles); m[c] = (m[c] || 0) - o.montant; } return m; };
     const actuel = parCat(depenses);
 
     // habitude : les 3 périodes précédentes, jusqu'au même jour de la période
@@ -358,7 +378,7 @@
       categories, aVenir, totalAVenir: Math.round(totalAVenir), reste: Math.round(reste),
       parJour: joursRestants > 0 ? Math.round(reste / joursRestants) : null,
       variableParJour: variableParJour == null ? null : Math.round(variableParJour),
-      operations: periode.filter((o) => !o.interne).sort((a, b) => b.d - a.d).map((o) => ({ date: iso(o.d), montant: o.montant, libelle: o.libelle, categorie: o.montant < 0 ? categorie(o.libelle) : 'revenu' })),
+      operations: periode.filter((o) => !o.interne).sort((a, b) => b.d - a.d).map((o) => ({ date: iso(o.d), montant: o.montant, libelle: o.libelle, categorie: categorie(o, regles), id: o.id })),
     };
   }
 
@@ -403,6 +423,187 @@
     return A;
   }
 
-  const api = { H, n, ym, lireYM, ecrireYM, mensualite, restantDu, fluxDuMois, parMois, effets, chiffres, simuler, analyser, cle, categorie, genre, suiviMois, comptesVue, alertes, NOM_CAT };
+  /* ---------- bilan : ce qui rentre, ce qui sort, ce qui va, ce qui ne va pas, et quoi faire ----------
+     Sur les mois complets connus (12 au plus). Avec la banque : tout vient des opérations.
+     Sans banque : on part du budget saisi (revenus, dépenses fixes, dépenses courantes). */
+  const arr = (v) => Math.round(v);
+  const moy = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
+  const borne = (x, a, b) => Math.max(a, Math.min(b, x));
+  function bilan({ operations, comptes, flux, regles, mensuel }, maintenant) {
+    const auj = maintenant ? new Date(maintenant) : new Date(); auj.setHours(12, 0, 0, 0);
+    const t0 = ym(auj);
+    const L = marquerInternes(operations || [], comptes, regles);
+    const C = (comptes || []).map((c) => ({ ...c, genre: genre(c), solde: n(c.solde) }));
+    const epargneDispo = C.filter((c) => c.genre === 'epargne').reduce((s, c) => s + c.solde, 0);
+    const placements = C.filter((c) => c.genre === 'placement').reduce((s, c) => s + c.solde, 0);
+    const courants = C.filter((c) => c.genre === 'courant');
+    const soldeCourant = courants.reduce((s, c) => s + c.solde, 0);
+    const avecBanque = L.length > 0;
+
+    // ----- les mois -----
+    let mois = [];
+    if (avecBanque) {
+      const premier = L.reduce((d, o) => (o.d < d ? o.d : d), L[0].d);
+      let i0 = ym(premier); if (premier.getDate() > 7) i0++; // premier mois incomplet : on l'écarte
+      i0 = Math.max(i0, t0 - 12);
+      for (let i = i0; i <= t0; i++) mois.push({ i, mois: ecrireYM(i), enCours: i === t0, entrees: 0, sorties: 0, misDeCote: 0, cats: {}, ops: 0 });
+      const parI = new Map(mois.map((m) => [m.i, m]));
+      for (const o of L) {
+        const m = parI.get(ym(o.d)); if (!m) continue;
+        if (o.versEpargne) m.misDeCote -= o.montant;
+        if (o.interne) continue;
+        m.ops++;
+        if (o.montant >= 0) { m.entrees += o.montant; continue; }
+        const c = categorie(o, regles); if (c === 'interne') continue;
+        m.sorties -= o.montant; m.cats[c] = (m.cats[c] || 0) - o.montant;
+      }
+      mois = mois.map((m) => ({ ...m, entrees: arr(m.entrees), sorties: arr(m.sorties), net: arr(m.entrees - m.sorties), misDeCote: arr(m.misDeCote) }));
+    }
+    const complets = mois.filter((m) => !m.enCours);
+    const recents = complets.slice(-3), anciens = complets.slice(-6, -3);
+    if (avecBanque && !complets.length) return { avecBanque, assez: false, mois, aClasser: L.filter((o) => !o.interne && aClasser(o, regles)).length };
+
+    // ----- moyennes par mois -----
+    let revenus, depenses, cats = {};
+    if (avecBanque) {
+      revenus = moy(recents.map((m) => m.entrees)); depenses = moy(recents.map((m) => m.sorties));
+      for (const m of recents) for (const [c, v] of Object.entries(m.cats)) cats[c] = (cats[c] || 0) + v / recents.length;
+    } else {
+      const M0 = mensuel || { revenus: 0, fixes: 0, courant: 0 };
+      revenus = M0.revenus; depenses = M0.fixes + M0.courant;
+      // sans banque, on range les dépenses fixes saisies d'après leur nom
+      for (const f of flux || []) if (f.sens === 'depense' && f.actif !== false) { const c = categorie(f.nom); const k = c === 'autres' ? 'fixes' : c; cats[k] = (cats[k] || 0) + parMois(f); }
+      if (M0.courant) cats.courant = (cats.courant || 0) + M0.courant;
+    }
+    const net = revenus - depenses;
+    const taux = revenus > 0 ? net / revenus : null;
+    const nomCat = (c) => NOM_CAT[c] || (c === 'fixes' ? 'Autres dépenses fixes' : c === 'courant' ? 'Dépenses courantes' : c);
+    const groupeDe = (c) => (c === 'fixes' ? 'besoin' : c === 'courant' ? 'envie' : GROUPE[c] || 'envie');
+    const categories = Object.entries(cats).filter(([, v]) => v >= 1).map(([id, v]) => {
+      const avant = anciens.length ? moy(anciens.map((m) => m.cats[id] || 0)) : null;
+      return { id, nom: nomCat(id), groupe: groupeDe(id), montant: arr(v), part: depenses ? v / depenses : 0, avant: avant == null ? null : arr(avant), serie: complets.map((m) => arr(m.cats[id] || 0)) };
+    }).sort((a, b) => b.montant - a.montant);
+    const besoins = categories.filter((c) => c.groupe === 'besoin').reduce((s, c) => s + c.montant, 0);
+    const envies = categories.filter((c) => c.groupe === 'envie').reduce((s, c) => s + c.montant, 0);
+    const repartition = revenus > 0 ? { besoins: besoins / revenus, envies: envies / revenus, epargne: Math.max(0, net) / revenus } : null;
+    const credits = cats.credits || 0;
+    const endettement = revenus > 0 ? credits / revenus : null;
+    const moisSecurite = depenses > 0 ? epargneDispo / depenses : null;
+    const hausses = categories.filter((c) => c.avant != null && c.montant - c.avant >= 30 && c.montant > c.avant * 1.2).map((c) => ({ ...c, de: c.montant - c.avant })).sort((a, b) => b.de - a.de);
+
+    // ----- découvert : solde du compte courant jour par jour, sur 90 jours -----
+    let joursRouge = 0, plusBas = null, frais = 0;
+    if (avecBanque && courants.length) {
+      const ids = new Set(courants.map((c) => c.id)), deb = new Date(auj.getTime() - 90 * JOUR_MS);
+      const ops = L.filter((o) => ids.has(o.compte_id) || !o.compte_id).sort((a, b) => b.d - a.d);
+      let solde = soldeCourant, k = 0;
+      for (let d = new Date(auj); d >= deb; d = new Date(d.getTime() - JOUR_MS)) {
+        if (solde < 0) joursRouge++;
+        plusBas = plusBas == null ? solde : Math.min(plusBas, solde);
+        while (k < ops.length && ops[k].d >= new Date(d.getFullYear(), d.getMonth(), d.getDate())) { solde -= ops[k].montant; k++; }
+      }
+      plusBas = arr(plusBas);
+      frais = arr(L.filter((o) => o.montant < 0 && o.d >= deb && categorie(o, regles) === 'frais').reduce((s, o) => s - o.montant, 0));
+    }
+
+    // ----- abonnements et paiements réguliers -----
+    const abonnements = [];
+    if (avecBanque) {
+      const G = new Map();
+      for (const o of L) {
+        if (o.montant >= 0 || o.interne || ym(o.d) < t0 - 4) continue;
+        const c = categorie(o, regles); if (c !== 'abonnements') continue;
+        const k = cle(o.libelle) || o.libelle; if (!G.has(k)) G.set(k, { nom: joli(k), m: [], mois: new Set() });
+        G.get(k).m.push(-o.montant); G.get(k).mois.add(ym(o.d));
+      }
+      for (const g of G.values()) if (g.mois.size >= 2) { const v = mediane(g.m); abonnements.push({ nom: g.nom, montant: Math.round(v * 100) / 100, parAn: arr(v * 12) }); }
+    } else for (const f of flux || []) if (f.sens === 'depense' && f.actif !== false && categorie(f.nom) === 'abonnements') abonnements.push({ nom: f.nom, montant: n(f.montant), parAn: arr(parMois(f) * 12) });
+    abonnements.sort((a, b) => b.montant - a.montant);
+    const totalAbosAn = abonnements.reduce((s, a) => s + a.parAn, 0), totalAbos = totalAbosAn / 12;
+
+    // ----- la note sur 100 -----
+    const pts = {
+      epargne: taux == null ? 0 : 35 * borne((taux + 0.05) / 0.25, 0, 1),
+      securite: moisSecurite == null ? 0 : 25 * borne(moisSecurite / 3, 0, 1),
+      decouvert: !avecBanque ? (net >= 0 ? 20 : 5) : 20 * borne(1 - joursRouge / 20, 0, 1) - (frais > 0 ? 4 : 0),
+      dettes: endettement == null ? 5 : 10 * borne((0.35 - endettement) / 0.2, 0, 1),
+      maitrise: repartition ? 10 * borne((0.75 - repartition.besoins) / 0.25, 0, 1) : 5,
+    };
+    const note = arr(borne(Object.values(pts).reduce((s, x) => s + x, 0), 0, 100));
+    const niveau = note >= 75 ? { ton: 'bon', nom: 'Solide' } : note >= 55 ? { ton: 'bon', nom: 'Correct' } : note >= 35 ? { ton: 'alerte', nom: 'Fragile' } : { ton: 'rouge', nom: 'En difficulté' };
+    const difficulte = net < 0 || joursRouge >= 5 || niveau.ton === 'rouge';
+
+    // ----- ce qui va, ce qui ne va pas -----
+    const P = (ton, titre, texte) => ({ ton, titre, texte });
+    const va = [], vaPas = [];
+    const e = (v) => `${Math.round(v).toLocaleString('fr-FR')} €`, pc = (v) => `${Math.round(v * 100)} %`;
+    if (taux != null) {
+      if (taux >= 0.15) va.push(P('bon', `Tu gardes ${pc(taux)} de tes revenus`, `Soit ${e(net)} par mois en moyenne. Au-dessus de 15 %, c’est un très bon rythme.`));
+      else if (taux >= 0.05) va.push(P('bon', `Tu termines le mois dans le vert`, `Il te reste ${e(net)} par mois en moyenne, ${pc(taux)} de tes revenus. Vise 10 à 20 %.`));
+      else if (net >= 0) vaPas.push(P('alerte', 'Tu finis le mois tout juste', `Il ne reste que ${e(net)} par mois en moyenne. Au moindre imprévu, tu passes dans le rouge.`));
+      else vaPas.push(P('rouge', `Tu dépenses plus que tu ne gagnes`, `${e(-net)} de trop chaque mois en moyenne : ${e(depenses)} de dépenses pour ${e(revenus)} de rentrées.`));
+    }
+    if (moisSecurite != null) {
+      if (moisSecurite >= 3) va.push(P('bon', `Ton épargne couvre ${Math.floor(moisSecurite)} mois`, `${e(epargneDispo)} de côté : de quoi tenir face à un coup dur.`));
+      else if (moisSecurite >= 1) vaPas.push(P('alerte', `Ton épargne couvre ${moisSecurite < 1.5 ? '1 mois' : `${Math.floor(moisSecurite)} mois`}`, `${e(epargneDispo)} de côté. L’idéal : 3 mois de dépenses, soit ${e(depenses * 3)}.`));
+      else vaPas.push(P(epargneDispo > 0 ? 'alerte' : 'rouge', epargneDispo > 0 ? 'Pas assez d’épargne de secours' : 'Aucune épargne de secours', `Moins d’un mois de dépenses de côté. Une panne de voiture ou une facture imprévue te met en difficulté.`));
+    }
+    if (avecBanque) {
+      if (joursRouge === 0 && frais === 0) va.push(P('bon', 'Aucun découvert en 3 mois', 'Ton compte courant est resté positif et tu n’as payé aucun frais bancaire.'));
+      else if (joursRouge > 0) vaPas.push(P(joursRouge >= 10 ? 'rouge' : 'alerte', `${joursRouge} jour${joursRouge > 1 ? 's' : ''} à découvert en 3 mois`, `Ton compte est descendu jusqu’à ${e(plusBas)}${frais ? `, et tu as payé ${e(frais)} de frais bancaires` : ''}.`));
+      else if (frais > 0) vaPas.push(P('alerte', `${e(frais)} de frais bancaires en 3 mois`, 'De l’argent perdu : vérifie ta carte, tes options et les commissions.'));
+    }
+    if (endettement != null && credits > 0) {
+      if (endettement > 0.35) vaPas.push(P('rouge', `Tes crédits prennent ${pc(endettement)} de tes revenus`, `${e(credits)} par mois. Au-delà de 35 %, le budget devient très serré et une banque refuse en général un nouveau prêt.`));
+      else if (endettement > 0.25) vaPas.push(P('alerte', `Crédits : ${pc(endettement)} de tes revenus`, `${e(credits)} par mois. Reste sous 35 %, évite d’en ajouter.`));
+      else va.push(P('bon', `Crédits sous contrôle`, `${e(credits)} par mois, ${pc(endettement)} de tes revenus.`));
+    }
+    if (repartition && repartition.besoins > 0.6) vaPas.push(P('alerte', `Les dépenses obligatoires pèsent ${pc(repartition.besoins)}`, `Logement, factures, courses, transport… Au-delà de 60 %, il reste peu de marge pour le reste.`));
+    for (const h of hausses.slice(0, 2)) vaPas.push(P('alerte', `${h.nom} : en hausse`, `${e(h.montant)} par mois ces 3 derniers mois, contre ${e(h.avant)} avant (+${e(h.de)}).`));
+    if (totalAbos >= 40) vaPas.push(P('alerte', `${abonnements.length} abonnements : ${e(totalAbosAn)} par an`, `${e(totalAbos)} par mois qui partent sans que tu y penses.`));
+
+    // ----- le plan : quoi faire, dans l'ordre -----
+    const plan = [];
+    const A = (titre, texte, gain) => plan.push({ titre, texte, gain: gain ? arr(gain) : 0 });
+    if (net < 0) A(`Trouver ${e(-net)} par mois`, `C’est ce qui manque pour équilibrer. Les étapes suivantes montrent où les prendre.`, 0);
+    if (avecBanque && (joursRouge > 0 || frais > 0)) A('Arrêter les frais bancaires', `${frais ? `${e(frais)} payés en 3 mois. ` : ''}Demande à ta banque la liste des frais et un plafond. Décale tes prélèvements juste après ta paie pour ne plus passer sous zéro.`, frais / 3);
+    if (abonnements.length) {
+      const top = abonnements.slice(0, 3).map((a) => a.nom).join(', ');
+      A('Faire le tri dans tes abonnements', `${e(totalAbos)} par mois (${top}${abonnements.length > 3 ? '…' : ''}). Garde ceux que tu utilises vraiment chaque semaine.`, totalAbos * 0.4);
+    }
+    const coupables = categories.filter((c) => c.groupe === 'envie' && !['abonnements', 'retraits', 'autres', 'courant'].includes(c.id) && c.montant >= 60).slice(0, 2);
+    for (const c of coupables) A(`${c.nom} : viser ${e(c.montant * 0.8)}`, `Tu y mets ${e(c.montant)} par mois. Avec 20 % de moins, tu gardes ${e(c.montant * 0.2)}${c.avant != null && c.montant > c.avant ? ` (c’était ${e(c.avant)} avant)` : ''}.`, c.montant * 0.2);
+    if (cats.courses >= 250) A('Courses : préparer une liste', `${e(cats.courses)} par mois. Liste, marques distributeur et un plafond par semaine font souvent gagner 10 %.`, cats.courses * 0.1);
+    if (endettement > 0.35) A('Ne pas ajouter de crédit', 'Pas de nouveau crédit ni de paiement en plusieurs fois. Demande à ta banque si un rachat ou une renégociation baisserait tes mensualités.', 0);
+    const gains = plan.reduce((s, a) => s + a.gain, 0);
+    const libre = Math.max(0, net);
+    if (moisSecurite != null && moisSecurite < 3) {
+      const cible = depenses * (moisSecurite < 1 ? 1 : 3), manque = Math.max(0, cible - epargneDispo);
+      const parMoisE = Math.max(20, Math.round(Math.max(libre * 0.5, revenus * 0.05, net < 0 ? gains * 0.5 : 0) / 10) * 10);
+      if (manque > 0) A(moisSecurite < 1 ? 'Te faire un matelas d’un mois' : 'Monter ton matelas à 3 mois', `Objectif : ${e(cible)} sur un livret. En mettant ${e(parMoisE)} de côté chaque mois, tu y es dans ${Math.ceil(manque / parMoisE)} mois.`, 0);
+    }
+    if (net >= 0 && taux != null && taux < 0.15 && revenus > 0) {
+      const v = Math.max(20, Math.round((revenus * 0.1) / 10) * 10);
+      A('Épargner dès la paie', `Programme un virement automatique de ${e(v)} vers ton livret le jour de ta paie. Ce qui part en premier ne se dépense pas.`, 0);
+    }
+    if (moisSecurite != null && moisSecurite >= 3 && soldeCourant > depenses * 1.5 && depenses > 0) A('Ne laisse pas dormir ton compte courant', `${e(soldeCourant - depenses)} de plus que ce dont tu as besoin pour le mois. Sur un livret, cet argent rapporterait des intérêts.`, 0);
+
+    return {
+      avecBanque, assez: true, mois, revenus: arr(revenus), depenses: arr(depenses), net: arr(net), taux,
+      categories, besoins: arr(besoins), envies: arr(envies), repartition, credits: arr(credits), endettement,
+      epargneDispo: arr(epargneDispo), placements: arr(placements), moisSecurite, joursRouge, plusBas, frais,
+      abonnements, totalAbos: arr(totalAbos), totalAbosAn, hausses, note, niveau, difficulte, points: pts, va, vaPas, plan, gains: arr(gains),
+      nbMois: avecBanque ? recents.length : 0,
+      aClasser: L.filter((o) => !o.interne && aClasser(o, regles)).length,
+    };
+  }
+
+  /* Opérations à afficher : toutes, du plus récent au plus ancien, chacune avec sa catégorie. */
+  function listeOperations(operations, comptes, regles) {
+    return marquerInternes(operations || [], comptes, regles).sort((a, b) => b.d - a.d)
+      .map((o) => ({ id: o.id, date: iso(o.d), montant: o.montant, libelle: o.libelle, compte_id: o.compte_id, interne: o.interne, categorie: o.interne ? 'interne' : categorie(o, regles), cle: cleRegle(o), hesite: !o.interne && aClasser(o, regles) }));
+  }
+
+  const api = { H, n, ym, lireYM, ecrireYM, mensualite, restantDu, fluxDuMois, parMois, effets, chiffres, simuler, analyser, cle, categorie, genre, suiviMois, comptesVue, alertes, NOM_CAT, GROUPE, CHOIX_DEPENSE, CHOIX_RENTREE, cleRegle, aClasser, bilan, listeOperations };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.Moteur = api;
 })(typeof self !== 'undefined' ? self : this);
